@@ -1,0 +1,37 @@
+            YO!
+   Oto ostateczna wersja BOMBEK - KULTOWEJ GRY RPG ;)
+   Czy ktos jeszcze pamieta commodorowe textowe rpg.
+   Gdzie siedzialo sie z dlugopisem w lapie i rysowalo mapy?
+   Teraz mozna to powtorzyc z gr¥ BOMBKI calkowicie po polsku.
+   Nie bede ukrywal ze zrobilem ja gdy bylem podjarany mud-ami
+   Kod programu jest prosty jak drut i wi©kszo˜† czasu zajmowalo mi
+   wymyslanie coraz to nowych wrogow , przedmiotow , questow...
+   Jednak jesli ktos chcialby zrobic textowke na enginie BOMBEK!
+   to ctx me :))) , dobra bla bla bla , ble ble ble . Mam nadzieje
+   ze bedziecie mieli tyle radochy ile ja mialem tworzac j¥ .
+
+   1)Oto wa¾ne komendy ktorych nie wiem czemu nie umiescilem w grze:
+   PAMIETAJ - zapisuje stan gry - jest tylko jeden wolny slot !!!
+   WLACZ POSTAC - Wczytuje poprzednio zapisany stan gry
+   ROZMAWIAJ - Niektore postacie dadza ci fajne questy gdy z nimi pogadasz
+   PAMIETAJ I WLACZ POSTAC - nale¾y wprowadzac w stanie podswiadomosci
+   ( nie wiecie co to znaczy ?? - wlaczcie BOMBKI !)
+
+   2)F.A.Q :
+           - Gra mi nie chce wejsc !
+           Odp:Jesli masz Celerona to fakt : proboj do skutku
+           ( Enter , Enter , Enter ) masz jakies 5% szans ze wejdzie
+           - Czy gra ma jakies bugi ? ( buraki )
+           Odp:Nieee skad :)) pomijajac to ze ja i 2 kolesi bylismy
+           jedynymi testerami i w tym czasie zd¥rzyˆem naprawic jakies
+           100 bˆ©d¢w : DLATEGO CTX ME JESLI COS ZNAJDZIECIE.
+           - Dlaczego ta gra jest taka super ?
+           Odp:Magia PASCALA moj przyjacielu ....
+
+  3)Dobra a teraz wymagania sprzetowe :
+  286 - 1 MB ram - 400 KB na twardym , wyobraznia , 540 Kb pamieci .
+  4)Adresik:
+                    Mateusz Pawluczuk
+                    Krakow 415-55-85
+                    uzborowi@cyf-kr.edu.pl
+  5) 'Ave a good time

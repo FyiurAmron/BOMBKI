@@ -1,0 +1,54 @@
+name: build-fpc-cross-image
+
+on:
+  push:
+    paths:
+      - 'docker/fpc-cross/**'
+      - 'tools/**'
+      - '.github/workflows/build-fpc-cross-image.yml'
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: rzuf79/bombki-fpc-cross
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: meta
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAG="latest"
+          else
+            TAG="${{ github.sha }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "image=${REGISTRY}/${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/fpc-cross/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          labels: |
+            org.opencontainers.image.title=BOMBKI FPC Win64 cross-toolchain
+            org.opencontainers.image.description=Cross-compile the reconstructed BOMBKI sources to Win64 with FPC
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}

@@ -1,0 +1,73 @@
+name: fpc
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-x86_64:
+    name: FPC Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install FPC
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fpc
+
+      - name: Build BOMBKI (Linux x86_64)
+        run: tools/build_fpc.py --target linux
+
+      - name: Verify executable
+        run: |
+          set -e
+          test -s build/fpc/BOMBKI-linux-x86_64
+          file build/fpc/BOMBKI-linux-x86_64 | grep -q "ELF 64-bit"
+
+      - name: Upload executable
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: bombki-linux-x86_64
+          path: build/fpc/BOMBKI-linux-x86_64
+          if-no-files-found: error
+
+  windows-x86_64-cross:
+    name: FPC Win64 cross-compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use published FPC Win64 cross image or build locally
+        id: image
+        run: |
+          IMAGE="ghcr.io/rzuf79/bombki-fpc-cross"
+          if docker pull "$IMAGE:latest"; then
+            echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published image unavailable; building docker/fpc-cross locally"
+            docker build -f docker/fpc-cross/Dockerfile -t "$IMAGE:local" .
+            echo "image=$IMAGE:local" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build BOMBKI (Win64)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/src -w /src \
+            "${{ steps.image.outputs.image }}" \
+            tools/build_fpc.py --target windows --fpc fpc-win64
+
+      - name: Verify executable
+        run: |
+          set -e
+          test -s build/fpc/BOMBKI-windows-x86_64.exe
+          file build/fpc/BOMBKI-windows-x86_64.exe | grep -qE "PE32\+ executable.*x86-64"
+
+      - name: Upload executable
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: bombki-windows-x86_64
+          path: build/fpc/BOMBKI-windows-x86_64.exe
+          if-no-files-found: error
