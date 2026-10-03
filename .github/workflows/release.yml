@@ -1,0 +1,60 @@
+name: release
+
+on:
+  push:
+    tags: ['*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install FPC (Linux build)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fpc
+
+      - name: Build BOMBKI (Linux x86_64)
+        run: tools/build_fpc.py --target linux
+
+      - name: Use published FPC Win64 cross image or build locally
+        id: image
+        run: |
+          IMAGE="ghcr.io/rzuf79/bombki-fpc-cross"
+          if docker pull "$IMAGE:latest"; then
+            echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published image unavailable; building docker/fpc-cross locally"
+            docker build -f docker/fpc-cross/Dockerfile -t "$IMAGE:local" .
+            echo "image=$IMAGE:local" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build BOMBKI (Win64)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/src -w /src \
+            "${{ steps.image.outputs.image }}" \
+            tools/build_fpc.py --target windows --fpc fpc-win64
+
+      - name: Verify executables
+        run: |
+          set -e
+          test -s build/fpc/BOMBKI-linux-x86_64
+          file build/fpc/BOMBKI-linux-x86_64 | grep -q "ELF 64-bit"
+          test -s build/fpc/BOMBKI-windows-x86_64.exe
+          file build/fpc/BOMBKI-windows-x86_64.exe | grep -qE "PE32\+ executable.*x86-64"
+
+      - name: Create GitHub release
+        run: |
+          ( cd build/fpc && sha256sum BOMBKI-linux-x86_64 BOMBKI-windows-x86_64.exe > SHA256SUMS )
+          gh release create "${{ github.ref_name }}" \
+            build/fpc/BOMBKI-linux-x86_64 \
+            build/fpc/BOMBKI-windows-x86_64.exe \
+            build/fpc/SHA256SUMS \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
