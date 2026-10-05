@@ -7,18 +7,18 @@ program BOMBKI;
   at img 0x16F9. Main loop bleed tick at img 0xB193; ordered room dispatch
   at img 0xB1E5. Backedge img 0xF5BF returns to img 0xB0F0. }
 uses
-  crt, swiat, przedm, monstra, dos;
+  crt, swiat, przedm, monstra;
 
 { program-level DGROUP workspace:
     ds:0x007E  plik / save-file TextRec (img 0x2BEA..0x2BF4)
-    ds:0x0564  PRZEDM.wpisz / command buffer (PRZEDM.KOMENDY at img 0x1BB11)
+    ds:0x0564  PRZEDM.wpisz / command buffer (PRZEDM.KOMENDY at img 0x1BB07)
   Other unit-owned globals live in the SWIAT/PRZEDM/MONSTRA interface vars. }
 
 label
-  L1012_ZachetaPodswiadomosc, L1025_Wyjscie, L1026_KoniecObladowania,
+  L1012_ZachetaPodswiadomosc, L1025_Wyjscie,
   L1027_Ucieczka16, L1028_PoUcieczce16;
 const
-  MIECHO_Podswiadomosc = 1000; { main command-room context }
+  MIECHO_Podswiadomosc = 1000; { subconscious (MODE) context }
   MIECHO_Smierc = 10000; { smierc context at img 0xEA22 }
 var
   Unused0052: Integer; { effectively unused: only saved/loaded, no business code }
@@ -26,8 +26,8 @@ var
   ZapisanoGre: Integer; { invented label for DGROUP word 0x056 }
   StanCieniasa: Integer;  { invented label for DGROUP word 0x058 }
   StanZrecznego: Integer;  { invented label for DGROUP word 0x05A }
-  StanSilnego: Integer;  { invented label for DGROUP word 0x05C }
-  StanOdpornego: Integer;  { invented label for DGROUP word 0x05E }
+  StanOdpornego: Integer;  { invented label for DGROUP word 0x05C }
+  StanOgromnego: Integer;  { invented label for DGROUP word 0x05E }
   JakaTarcza: Integer;  { invented label for DGROUP word 0x060 }
   LimitPrzedmiotow: Integer;     { invented label for DGROUP word 0x062 }
   Unused0064: Integer; { completely unused: no references }
@@ -48,7 +48,7 @@ var
 procedure WalkaKoncert; forward;
 procedure WybierzRase; forward;
 procedure PunktyKontrolne; forward;
-procedure ZdobadzPoziom; forward;
+procedure SprawdzCzyZdobylesLevel; forward;
 procedure Trening; forward;
 procedure Pokoj2; forward;
 procedure Pokoj3; forward;
@@ -160,15 +160,9 @@ begin
   WriteLn('TWOJE PARAMETRY : SILA - ', SIL, '/', MAXSIL,
          ' ZRECZNOSC - ', ZRE, '/', MAXZRE,
          ' MADROSC - ', MAD, '/', MAXMAD);
-  {$IFDEF FPC}
-  SilaZbroi := PRZEDM.PRO + 10 * PRZEDM.ILOSC;
-  WriteLn('S.Z-', SilaZbroi,
-         '                    FUKSROLL-', PRZEDM.FUKSROLL);
-  {$ELSE}
   SilaZbroi := 10 * PRZEDM.ILOSC + PRZEDM.PRO;
   WriteLn('S.Z-', SilaZbroi,
          '                    FUKSROLL-', PRZEDM.FUKSROLL);
-  {$ENDIF}
   WriteLn('MASZ ', MANA, '/', MAXMANA, ' MANY');
   WriteLn('MASZ ', ENERGIA, '/', MAXE, ' ENERGII');
   if QUEST = 1 then WriteLn('TWOJ AKTUALNY QUEST - ZABIC MUSISZ JESZCZE ', QUESTWYK, ' POTWOROW');
@@ -224,8 +218,8 @@ begin
   { PunktKontrolny starts at zero in the cleared DGROUP (img 0x51D5). }
   MONSTRA.SILNY := 13; { img 0x1973 DGROUP $68C }
   StanZrecznego := 14; { img 0x1979, DGROUP 0x05A }
-  StanSilnego := 15; { img 0x197F, DGROUP 0x05C }
-  StanOdpornego := 16; { img 0x1985, DGROUP 0x05E }
+  StanOdpornego := 15; { img 0x197F, DGROUP 0x05C }
+  StanOgromnego := 16; { img 0x1985, DGROUP 0x05E }
   { Room-state initializers are in Room at img 0x12ACA. }
   POZIOM := 1;
   MAXMANA := MAXMANA + 100;
@@ -244,7 +238,7 @@ begin
 end;
 
 procedure WalkaMiasto;
-{ img 0x1C2A..0x1E97: room-gated dog/city-animal kill router }
+{ img 0x1C2A..0x1E97: room-gated dog/city-NPC kill router }
 begin
   if (wpisz = 'ZABIJ OWCZAREK') and (MONSTRA.OWCZAREK = MIECHO) then begin
     PRZEDM.WALKAPIES;
@@ -305,7 +299,7 @@ begin
 end;
 
 procedure Trening;
-{ Invented source name for the program-local routine at img 0x2395..0x2B74. }
+{ Invented source name for the program-local routine at img 0x2396..0x2B74. }
 begin
   if wpisz = 'PATRZ PLAKAT' then begin
     WriteLn('NA PLAKACIE PISZE:');
@@ -439,8 +433,8 @@ begin
   WriteLn(plik, StanCieniasa);
   WriteLn(plik, MONSTRA.SILNY);
   WriteLn(plik, StanZrecznego);
-  WriteLn(plik, StanSilnego);
   WriteLn(plik, StanOdpornego);
+  WriteLn(plik, StanOgromnego);
   WriteLn(plik, JakaTarcza);
   WriteLn(plik, SilaZbroi);
   WriteLn(plik, POTRAWKI);
@@ -510,7 +504,7 @@ begin
 end;
 
 procedure ZakupyPiekarnia;
-{ img 0x139BE..0x13CEA: LISTA and KUP food commands }
+{ img 0x39BE..0x3CEA: LISTA and KUP food commands }
 begin
   if wpisz = 'LISTA' then begin
     WriteLn('NAZWA         CENA');
@@ -930,25 +924,25 @@ begin
         if PRZEDM.MMIECZ = 0 then begin
           PRZEDM.FUKS := Random(20);
           if PRZEDM.FUKS < 4 then begin
-          PRZEDM.MMIECZ := MIECHO;
-          WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
-          WartoscMiecza := 500;
+            PRZEDM.MMIECZ := MIECHO;
+            WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
+            WartoscMiecza := 500;
           end;
         end;
         if PRZEDM.MTARCZA = 0 then begin
           PRZEDM.FUKS := Random(20);
           if PRZEDM.FUKS < 4 then begin
-          PRZEDM.MTARCZA := MIECHO;
-          WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
-          WartoscTarczy := 300;
+            PRZEDM.MTARCZA := MIECHO;
+            WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
+            WartoscTarczy := 300;
           end;
         end;
         if PRZEDM.SERCE = 0 then begin
           PRZEDM.FUKS := Random(20);
           if PRZEDM.FUKS < 6 then begin
-          PRZEDM.SERCE := MIECHO;
-          WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
-          WartoscSerca := 50;
+            PRZEDM.SERCE := MIECHO;
+            WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
+            WartoscSerca := 50;
           end;
         end;
       end
@@ -1321,8 +1315,8 @@ begin
   Read(plik, StanCieniasa);
   Read(plik, MONSTRA.SILNY);
   Read(plik, StanZrecznego);
-  Read(plik, StanSilnego);
   Read(plik, StanOdpornego);
+  Read(plik, StanOgromnego);
   Read(plik, JakaTarcza);
   Read(plik, SilaZbroi);
   Read(plik, POTRAWKI);
@@ -1370,10 +1364,8 @@ begin
   WriteLn('suckemall:', PRZEDM.JAKIEUB);
 end;
 
-procedure ZdobadzPoziom;
+procedure SprawdzCzyZdobylesLevel;
 { img 0x872E..0x8BA2: level thresholds and stat gains }
-label
-  1;
 begin
   if (KUNSZT < 700) or (POZIOM <> 1) then
     if (KUNSZT < 725) or (POZIOM <> 2) then
@@ -1382,7 +1374,6 @@ begin
           if POZIOM <= 8 then Exit;
           if (735 + POZIOM + POZIOM) > KUNSZT then Exit;
         end;
-1:
   { Level up body at img 0x87A2 }
   WriteLn('<<<<<<<<<=+=+=+!!!#####ZDOBYLES LEVEL#####!!!+=+=+=<<<<<<<<<<<<<');
   WriteLn('<<<<<<<<<=+=+=+!!!#####ZDOBYLES LEVEL#####!!!+=+=+=<<<<<<<<<<<<<');
@@ -1453,14 +1444,14 @@ begin
   WybierzRase; { near-call displacement lands at IP 0x16EF after 16-bit wrap }
   ReadKey; { ignored result; CRT lcall 1C0F:031A at img 0xB0EB }
   repeat
-  PunktyKontrolne; { call 0x51C3 at img 0xB0F0 }
-  ZdobadzPoziom; { call 0x872E at img 0xB0F3 }
+    PunktyKontrolne; { call 0x51C3 at img 0xB0F0 }
+    SprawdzCzyZdobylesLevel; { call 0x872E at img 0xB0F3 }
   { Overload gate: PRZED [0x182] > LimitPrzedmiotow [0x62] -> overload-print block }
-  if PRZED <= LimitPrzedmiotow then goto L1026_KoniecObladowania;
-  WriteLn('JESTES OBLADOWANY !!! MASZ O ', PRZED - LimitPrzedmiotow, ' ZA DUZO');
-  WriteLn('TRACISZ ', (PRZED - LimitPrzedmiotow) * 10, '% ENERGI');
-  ENERGIA := ENERGIA - ((PRZED - LimitPrzedmiotow) * 10);
-L1026_KoniecObladowania:
+    if PRZED > LimitPrzedmiotow then begin
+      WriteLn('JESTES OBLADOWANY !!! MASZ O ', PRZED - LimitPrzedmiotow, ' ZA DUZO');
+      WriteLn('TRACISZ ', (PRZED - LimitPrzedmiotow) * 10, '% ENERGI');
+      ENERGIA := ENERGIA - ((PRZED - LimitPrzedmiotow) * 10);
+    end;
   { --- img 0xB193 bleed tick; img 0xB1E5 ordered room dispatch --- }
     { bleed tick at img 0xB193..0xB1E4 }
     if ILEPOI > 0 then begin
@@ -1484,238 +1475,238 @@ L1026_KoniecObladowania:
 { img 0xB264..0xB520: inline room 14 (context 14) - zreczny potwor }
     if MIECHO = 14 then begin
 
-  WriteLn('TEN POKOJ JEST CALY OBRYZGANY KRWIA NA SCIANACH FLAKI I MOZGI LODZKIE ');
-  if StanZrecznego = 14 then
-    WriteLn('ZRECZNY POTWOR SMIGA MIEDZY SCIANAMI');
-  if StanZrecznego = 0 then
-    WriteLn('PAROJACE WNETRZNOSCI POTWORA SMIERDZA DOSYC MOCNO');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-KLATKI PELNE GAJDY');
-    end;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLODNIE' then MIECHO := 11;
-    if (wpisz = 'ZABIJ POTWOR') and (StanZrecznego = 14) then begin
-      WROGEN := 20; WROGZRE := 30; WROGSIL := 3;
-      WALKA;
-      if PASZOL = 0 then begin
-        StanZrecznego := 0;
-        CZY := Random(15);
-        WriteLn('WYCIAGASZ ', CZY, ' MONET Z CIALA POTWORA');
-        FORSA := FORSA + CZY;
-        if PRZEDM.MMIECZ = 0 then begin
-          PRZEDM.FUKS := Random(20);
-          if PRZEDM.FUKS < 7 then begin
-            PRZEDM.MMIECZ := MIECHO;
-            WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
-            WartoscMiecza := 500;
-          end;
+      WriteLn('TEN POKOJ JEST CALY OBRYZGANY KRWIA NA SCIANACH FLAKI I MOZGI LODZKIE ');
+      if StanZrecznego = 14 then
+        WriteLn('ZRECZNY POTWOR SMIGA MIEDZY SCIANAMI');
+      if StanZrecznego = 0 then
+        WriteLn('PAROJACE WNETRZNOSCI POTWORA SMIERDZA DOSYC MOCNO');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-KLATKI PELNE GAJDY');
         end;
-        if PRZEDM.MTARCZA = 0 then begin
-          PRZEDM.FUKS := Random(20);
-          if PRZEDM.FUKS < 7 then begin
-            PRZEDM.MTARCZA := MIECHO;
-            WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
-            WartoscTarczy := 300;
-          end;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLODNIE' then MIECHO := 11;
+        if (wpisz = 'ZABIJ POTWOR') and (StanZrecznego = 14) then begin
+          WROGEN := 20; WROGZRE := 30; WROGSIL := 3;
+          WALKA;
+          if PASZOL = 0 then begin
+            StanZrecznego := 0;
+            CZY := Random(15);
+            WriteLn('WYCIAGASZ ', CZY, ' MONET Z CIALA POTWORA');
+            FORSA := FORSA + CZY;
+            if PRZEDM.MMIECZ = 0 then begin
+              PRZEDM.FUKS := Random(20);
+              if PRZEDM.FUKS < 7 then begin
+                PRZEDM.MMIECZ := MIECHO;
+                WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
+                WartoscMiecza := 500;
+              end;
+            end;
+            if PRZEDM.MTARCZA = 0 then begin
+              PRZEDM.FUKS := Random(20);
+              if PRZEDM.FUKS < 7 then begin
+                PRZEDM.MTARCZA := MIECHO;
+                WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
+                WartoscTarczy := 300;
+              end;
+            end;
+            if PRZEDM.SERCE = 0 then begin
+              PRZEDM.FUKS := Random(20);
+              if PRZEDM.FUKS < 6 then begin
+                PRZEDM.SERCE := MIECHO;
+                WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
+                WartoscSerca := 50;
+              end;
+            end;
+          end else
+            PASZOL := 0;
         end;
-        if PRZEDM.SERCE = 0 then begin
-          PRZEDM.FUKS := Random(20);
-          if PRZEDM.FUKS < 6 then begin
-            PRZEDM.SERCE := MIECHO;
-            WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
-            WartoscSerca := 50;
-          end;
-        end;
-      end else
-        PASZOL := 0;
-    end;
-  until MIECHO <> 14;
+      until MIECHO <> 14;
 
     end;
-{ img 0xB52B..0xB7F1: inline room 15 (context 15) - silny potwor }
+{ img 0xB52B..0xB7F1: inline room 15 (context 15) - odporny potwor }
     if MIECHO = 15 then begin
 
-  WriteLn('TEN POKOJ JEST CALY OBRYZGANY KRWIA NA SCIANACH FLAKI I MOZGI LODZKIE ');
-  if StanSilnego = 15 then
-    WriteLn('POWOLNY ACZ ODPORNY NA BOL POTWOR SPOKOJNIE LEZY POD SCIANA');
-  if StanSilnego = 0 then
-    WriteLn('PAROJACE WNETRZNOSCI POTWORA SA ROZWLECZONE DOOKOLA');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLNOC-KLATKI PELNE GAJDY');
-    end;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLNOC' then MIECHO := 11;
-    if (wpisz = 'ZABIJ POTWOR') and (StanSilnego = 15) then begin
-      WROGEN := 40; WROGZRE := 3; WROGSIL := 3;
-      WALKA;
-      if PASZOL = 0 then begin
-        StanSilnego := 0;
-        CZY := Random(15);
-        WriteLn('WYCIAGASZ ', CZY, ' MONET Z CIALA POTWORA');
-        FORSA := FORSA + CZY;
-        if PRZEDM.MMIECZ = 0 then begin
-          PRZEDM.FUKS := Random(20);
-          if PRZEDM.FUKS < 7 then begin
-            PRZEDM.MMIECZ := MIECHO;
-            WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
-            WartoscMiecza := 500;
-          end;
+      WriteLn('TEN POKOJ JEST CALY OBRYZGANY KRWIA NA SCIANACH FLAKI I MOZGI LODZKIE ');
+      if StanOdpornego = 15 then
+        WriteLn('POWOLNY ACZ ODPORNY NA BOL POTWOR SPOKOJNIE LEZY POD SCIANA');
+      if StanOdpornego = 0 then
+        WriteLn('PAROJACE WNETRZNOSCI POTWORA SA ROZWLECZONE DOOKOLA');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLNOC-KLATKI PELNE GAJDY');
         end;
-        if PRZEDM.MTARCZA = 0 then begin
-          PRZEDM.FUKS := Random(20);
-          if PRZEDM.FUKS < 7 then begin
-            PRZEDM.MTARCZA := MIECHO;
-            WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
-            WartoscTarczy := 300;
-          end;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLNOC' then MIECHO := 11;
+        if (wpisz = 'ZABIJ POTWOR') and (StanOdpornego = 15) then begin
+          WROGEN := 40; WROGZRE := 3; WROGSIL := 3;
+          WALKA;
+          if PASZOL = 0 then begin
+            StanOdpornego := 0;
+            CZY := Random(15);
+            WriteLn('WYCIAGASZ ', CZY, ' MONET Z CIALA POTWORA');
+            FORSA := FORSA + CZY;
+            if PRZEDM.MMIECZ = 0 then begin
+              PRZEDM.FUKS := Random(20);
+              if PRZEDM.FUKS < 7 then begin
+                PRZEDM.MMIECZ := MIECHO;
+                WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
+                WartoscMiecza := 500;
+              end;
+            end;
+            if PRZEDM.MTARCZA = 0 then begin
+              PRZEDM.FUKS := Random(20);
+              if PRZEDM.FUKS < 7 then begin
+                PRZEDM.MTARCZA := MIECHO;
+                WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
+                WartoscTarczy := 300;
+              end;
+            end;
+            if PRZEDM.SERCE = 0 then begin
+              PRZEDM.FUKS := Random(20);
+              if PRZEDM.FUKS < 6 then begin
+                PRZEDM.SERCE := MIECHO;
+                WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
+                WartoscSerca := 50;
+              end;
+            end;
+          end else
+            PASZOL := 0;
         end;
-        if PRZEDM.SERCE = 0 then begin
-          PRZEDM.FUKS := Random(20);
-          if PRZEDM.FUKS < 6 then begin
-            PRZEDM.SERCE := MIECHO;
-            WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
-            WartoscSerca := 50;
-          end;
-        end;
-      end else
-        PASZOL := 0;
-    end;
-  until MIECHO <> 15;
+      until MIECHO <> 15;
 
     end;
-{ img 0xB7F2..0xBAAB: inline room 16 (context 16) - odporny potwor }
+{ img 0xB7F2..0xBAAB: inline room 16 (context 16) - silny potwor }
     if MIECHO = 16 then begin
 
-  WriteLn('TEN POKOJ JEST CALY OBRYZGANY KRWIA NA SCIANACH FLAKI I MOZGI LODZKIE ');
-  if StanOdpornego = 16 then
-    WriteLn('OGROMNY POTWOR WIDZAC MIESO RZUCA SIE NA CIEBIE');
-  if StanOdpornego = 0 then
-    WriteLn('PAROJACE WNETRZNOSCI POTWORA SA ROZWLECZONE DOOKOLA');
-  repeat
-  if StanOdpornego = 16 then begin
-    WROGEN := 40; WROGZRE := 11; WROGSIL := 10;
-    WALKA;
-    if PASZOL <> 0 then goto L1027_Ucieczka16;
-    StanOdpornego := 0;
-    CZY := Random(30);
-    WriteLn('WYCIAGASZ ', CZY, ' MONET Z CIALA POTWORA');
-    FORSA := FORSA + CZY;
-    if PRZEDM.MMIECZ = 0 then begin
-      PRZEDM.FUKS := Random(20);
-      if PRZEDM.FUKS < 10 then begin
-        PRZEDM.MMIECZ := MIECHO;
-        WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
-        WartoscMiecza := 500;
-      end;
-    end;
-    if PRZEDM.MTARCZA = 0 then begin
-      PRZEDM.FUKS := Random(20);
-      if PRZEDM.FUKS < 10 then begin
-        PRZEDM.MTARCZA := MIECHO;
-        WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
-        WartoscTarczy := 300;
-      end;
-    end;
-    if PRZEDM.SERCE = 0 then begin
-      PRZEDM.FUKS := Random(20);
-      if PRZEDM.FUKS < 6 then begin
-        PRZEDM.SERCE := MIECHO;
-        WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
-        WartoscSerca := 50;
-      end;
-    end;
-    goto L1028_PoUcieczce16;
-L1027_Ucieczka16:
-    PASZOL := 0;
-    MIECHO := 11;
-L1028_PoUcieczce16:
-  end;
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('DOL-KLATKI PELNE GAJDY');
-    end;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'DOL' then MIECHO := 11;
-  until MIECHO <> 16;
+      WriteLn('TEN POKOJ JEST CALY OBRYZGANY KRWIA NA SCIANACH FLAKI I MOZGI LODZKIE ');
+      if StanOgromnego = 16 then
+        WriteLn('OGROMNY POTWOR WIDZAC MIESO RZUCA SIE NA CIEBIE');
+      if StanOgromnego = 0 then
+        WriteLn('PAROJACE WNETRZNOSCI POTWORA SA ROZWLECZONE DOOKOLA');
+      repeat
+        if StanOgromnego = 16 then begin
+          WROGEN := 40; WROGZRE := 11; WROGSIL := 10;
+          WALKA;
+          if PASZOL <> 0 then goto L1027_Ucieczka16;
+          StanOgromnego := 0;
+          CZY := Random(30);
+          WriteLn('WYCIAGASZ ', CZY, ' MONET Z CIALA POTWORA');
+          FORSA := FORSA + CZY;
+          if PRZEDM.MMIECZ = 0 then begin
+            PRZEDM.FUKS := Random(20);
+            if PRZEDM.FUKS < 10 then begin
+              PRZEDM.MMIECZ := MIECHO;
+              WriteLn('WYCIAGASZ STARY ZARDZEWIALY MIECZ Z CIALA POTWORA');
+              WartoscMiecza := 500;
+            end;
+          end;
+          if PRZEDM.MTARCZA = 0 then begin
+            PRZEDM.FUKS := Random(20);
+            if PRZEDM.FUKS < 10 then begin
+              PRZEDM.MTARCZA := MIECHO;
+              WriteLn('WYCIAGASZ ZWYKLA MALA TARCZA Z CIALA POTWORA');
+              WartoscTarczy := 300;
+            end;
+          end;
+          if PRZEDM.SERCE = 0 then begin
+            PRZEDM.FUKS := Random(20);
+            if PRZEDM.FUKS < 6 then begin
+              PRZEDM.SERCE := MIECHO;
+              WriteLn('WYCIAGASZ ZAKRWAWIONE SERCE Z CIALA POTWORA');
+              WartoscSerca := 50;
+            end;
+          end;
+          goto L1028_PoUcieczce16;
+          L1027_Ucieczka16:
+          PASZOL := 0;
+          MIECHO := 11;
+          L1028_PoUcieczce16:
+        end;
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('DOL-KLATKI PELNE GAJDY');
+        end;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'DOL' then MIECHO := 11;
+      until MIECHO <> 16;
 
     end;
 { img 0xBAAB..0xBD1E: inline room 17, the poster room }
     if MIECHO = 17 then begin
 
-  WriteLn('JESTES W POKOJU W KTORYM !JEST! !PLAKAT (SMIERDZI TU) ');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('GORA-KLATKI PELNE GAJDY');
-      WriteLn('DOL-TELEPORT!!!');
-    end;
-    if wpisz = 'PATRZ PLAKAT' then begin
-      WriteLn('NA PLAKACIE PISZE:');
-      WriteLn('SORRY ZE NIE UMYLEM POKOJU ALE NIE MAM NA TO CZASU');
-      WriteLn('JEZELI BYLES AKTYWNY TO POWINIENES LICZYC NA NAGRODE');
-      WriteLn('SPRAWDZ CZY LEZY TU COS , POTEM MOZESZ ZEJZD DO TELEPORTU ');
-      if (StanCieniasa = 0) and (StanZrecznego = 0) and
-         (MONSTRA.SILNY = 0) and (StanSilnego = 0) and
-         (StanOdpornego = 0) and (DYPLOM = 0) then
-        DYPLOM := 17;
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'GORA' then MIECHO := 11;
-    if wpisz = 'DOL' then MIECHO := 18;
-  until MIECHO <> 17;
+      WriteLn('JESTES W POKOJU W KTORYM !JEST! !PLAKAT (SMIERDZI TU) ');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('GORA-KLATKI PELNE GAJDY');
+          WriteLn('DOL-TELEPORT!!!');
+        end;
+        if wpisz = 'PATRZ PLAKAT' then begin
+          WriteLn('NA PLAKACIE PISZE:');
+          WriteLn('SORRY ZE NIE UMYLEM POKOJU ALE NIE MAM NA TO CZASU');
+          WriteLn('JEZELI BYLES AKTYWNY TO POWINIENES LICZYC NA NAGRODE');
+          WriteLn('SPRAWDZ CZY LEZY TU COS , POTEM MOZESZ ZEJZD DO TELEPORTU ');
+          if (StanCieniasa = 0) and (StanZrecznego = 0) and
+          (MONSTRA.SILNY = 0) and (StanOdpornego = 0) and
+          (StanOgromnego = 0) and (DYPLOM = 0) then
+            DYPLOM := 17;
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'GORA' then MIECHO := 11;
+        if wpisz = 'DOL' then MIECHO := 18;
+      until MIECHO <> 17;
 
     end;
 { img 0xBCA2..0xBD1E: one-shot teleport room, context 18 -> room 1 }
     if MIECHO = 18 then begin
 
-  WriteLn('BBBBBBBBZBZBZBZBZZZZZZZzzzzzzzzzbbzbBbzbzbzBZZZ');
-  WriteLn('===-------......_________.....----------....._______....-------======');
-  WriteLn('T***E***L***E***P***O***R***T***O***W***A***L***E***S***** *****S***I***E!');
-  WriteLn('==========================================================================');
-  MIECHO := 1;
+      WriteLn('BBBBBBBBZBZBZBZBZZZZZZZzzzzzzzzzbbzbBbzbzbzBZZZ');
+      WriteLn('===-------......_________.....----------....._______....-------======');
+      WriteLn('T***E***L***E***P***O***R***T***O***W***A***L***E***S***** *****S***I***E!');
+      WriteLn('==========================================================================');
+      MIECHO := 1;
 
     end;
 { img 0xBD29..0xBF0A: context 20, city center }
     if MIECHO = 20 then begin
 
-  WriteLn('JESTES W CENTRUM MIASTA : NA SCIANIE JEST PLAKAT (DUZY RUCH) ');
-  PRZEDM.ULSKLEPIKOWA; { img 0xBD45 -> PRZEDM entry at 0x155F2 }
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'PATRZ PLAKAT' then
-      WriteLn('TO JEST MIASTO : RADZ SOBIE SAM!');
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-POKOJ CENTRALNY');
-      WriteLn('POLNOC-UL.SKLEPIKOWA');
-      WriteLn('WSCHOD-UL.CIEMNA');
-      WriteLn('ZACHOD-UL.DLUGA');
-    end;
-    if wpisz = 'WYJSC0IE' then goto L1025_Wyjscie;
-    if wpisz = 'POLODNIE' then MIECHO := 1;
-    if wpisz = 'POLNOC' then MIECHO := 21;
-    if wpisz = 'ZACHOD' then MIECHO := 30;
-    if wpisz = 'WSCHOD' then MIECHO := 75;
-    WalkaMiasto; { img 0x11C2A }
-  until MIECHO <> 20;
+      WriteLn('JESTES W CENTRUM MIASTA : NA SCIANIE JEST PLAKAT (DUZY RUCH) ');
+      PRZEDM.ULSKLEPIKOWA; { img 0xBD45 -> PRZEDM entry at 0x155F2 }
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'PATRZ PLAKAT' then
+          WriteLn('TO JEST MIASTO : RADZ SOBIE SAM!');
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-POKOJ CENTRALNY');
+          WriteLn('POLNOC-UL.SKLEPIKOWA');
+          WriteLn('WSCHOD-UL.CIEMNA');
+          WriteLn('ZACHOD-UL.DLUGA');
+        end;
+        if wpisz = 'WYJSC0IE' then goto L1025_Wyjscie;
+        if wpisz = 'POLODNIE' then MIECHO := 1;
+        if wpisz = 'POLNOC' then MIECHO := 21;
+        if wpisz = 'ZACHOD' then MIECHO := 30;
+        if wpisz = 'WSCHOD' then MIECHO := 75;
+        WalkaMiasto; { img 0x11C2A }
+      until MIECHO <> 20;
 
     end;
     if MIECHO = 75 then POKOJ75;
@@ -1723,631 +1714,631 @@ L1028_PoUcieczce16:
 { img 0xC005..0xC202: context 0x4C (76) - BAR POD DWOMA PEDALAMI }
     if MIECHO = 76 then begin
 
-  WriteLn('JESTES W BARZE POD DWOMA PEDALAMI CHCAC ROZWIKLAC TA DZIWNA NAZWE');
-  WriteLn('PYTASZ SIE BARMANA : PRZEPRASZAM DLACZEGO TEN BAR NAZYWA SIE  ');
-  WriteLn('"POD DWOMA PEDALAMI"? A ON NA TO -WLASCIWIE TO NIE WIEM');
-  WriteLn(' ALE SPYTAM SIE ZONY:MAREEEK!!.......(teraz ju'#190' wiesz) ');
-  if MONSTRA.MACIEK = 76 then
-    WriteLn('MACIEK , TUTEJSZY BARMAN SERWUJE TUTAJ DRINKI (MOZLIWA LISTA!');
-  if MONSTRA.PEDAL = 76 then
-    WriteLn(' PEDAL CZEKA TU NA TEGO JEDYNEGO');
-  if MONSTRA.PARA = 76 then
-    WriteLn('PARA-JACEK I JUREK OBMYSLAJA MIESIAC MIODOWY');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-ULICA CIEMNA');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLODNIE' then MIECHO := 75;
-    if wpisz = 'LISTA' then begin
-      WriteLn('DRINK        CENA');
-      WriteLn('ORAL DRINK     130');
-      WriteLn('ONANISOFT      180');
-      WriteLn('PEDAL&SPRZEGLO 220');
-    end;
-    if wpisz = 'ZABIJ PEDAL' then begin
-      PRZEDM.EASY;
-      MONSTRA.PEDAL := 0;
-      PRZEDM.PIGULKAZYSK;
-    end;
-    if wpisz = 'ZABIJ PARA' then begin
-      PRZEDM.BTRUDNO;
-      MONSTRA.PARA := 0;
-      PRZEDM.BTRUDNO;
-    end;
-    if wpisz = 'ZABIJ MACIEK' then begin
-      PRZEDM.EASY;
-      MONSTRA.MACIEK := 0;
-    end;
-    if wpisz = 'MAM 18 LAT' then begin
-      WriteLn('I CO Z TEGO ??? A JA MAM 100 LAT I ZYJE !!!');
-    end;
-  until MIECHO <> 76;
+      WriteLn('JESTES W BARZE POD DWOMA PEDALAMI CHCAC ROZWIKLAC TA DZIWNA NAZWE');
+      WriteLn('PYTASZ SIE BARMANA : PRZEPRASZAM DLACZEGO TEN BAR NAZYWA SIE  ');
+      WriteLn('"POD DWOMA PEDALAMI"? A ON NA TO -WLASCIWIE TO NIE WIEM');
+      WriteLn(' ALE SPYTAM SIE ZONY:MAREEEK!!.......(teraz ju'#190' wiesz) ');
+      if MONSTRA.MACIEK = 76 then
+        WriteLn('MACIEK , TUTEJSZY BARMAN SERWUJE TUTAJ DRINKI (MOZLIWA LISTA!');
+      if MONSTRA.PEDAL = 76 then
+        WriteLn(' PEDAL CZEKA TU NA TEGO JEDYNEGO');
+      if MONSTRA.PARA = 76 then
+        WriteLn('PARA-JACEK I JUREK OBMYSLAJA MIESIAC MIODOWY');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-ULICA CIEMNA');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLODNIE' then MIECHO := 75;
+        if wpisz = 'LISTA' then begin
+          WriteLn('DRINK        CENA');
+          WriteLn('ORAL DRINK     130');
+          WriteLn('ONANISOFT      180');
+          WriteLn('PEDAL&SPRZEGLO 220');
+        end;
+        if wpisz = 'ZABIJ PEDAL' then begin
+          PRZEDM.EASY;
+          MONSTRA.PEDAL := 0;
+          PRZEDM.PIGULKAZYSK;
+        end;
+        if wpisz = 'ZABIJ PARA' then begin
+          PRZEDM.BTRUDNO;
+          MONSTRA.PARA := 0;
+          PRZEDM.BTRUDNO;
+        end;
+        if wpisz = 'ZABIJ MACIEK' then begin
+          PRZEDM.EASY;
+          MONSTRA.MACIEK := 0;
+        end;
+        if wpisz = 'MAM 18 LAT' then begin
+          WriteLn('I CO Z TEGO ??? A JA MAM 100 LAT I ZYJE !!!');
+        end;
+      until MIECHO <> 76;
 
     end;
 { img 0xC20C..0xC3D9: inline context 77 }
     if MIECHO = 77 then begin
 
-  WriteLn('ZNALAZLES SIE WSROD BLUSZCZU , WOKOLO CIEBIE TAJEMNICZE ROSLINY ');
-  WriteLn('MUSISZ BARDZO UWAZAC,TU NAWET STOKROTKA MOZE BYC ZABOJCZA');
-  PRZEDM.BLUSZCZ;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    PRZEDM.FIGHTBLUSZCZ;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLNOC-UL.CIEMNA');
-      WriteLn('WSCHOD-BLUSZCZ');
-      WriteLn('ZACHOD-BLUSZCZ');
-      WriteLn('POLODNIE-BLUSZCZ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLNOC' then MIECHO := 75;
-    if wpisz = 'WSCHOD' then MIECHO := 78;
-    if wpisz = 'ZACHOD' then MIECHO := 79;
-    if wpisz = 'POLODNIE' then MIECHO := 80;
-  until MIECHO <> 77;
+      WriteLn('ZNALAZLES SIE WSROD BLUSZCZU , WOKOLO CIEBIE TAJEMNICZE ROSLINY ');
+      WriteLn('MUSISZ BARDZO UWAZAC,TU NAWET STOKROTKA MOZE BYC ZABOJCZA');
+      PRZEDM.BLUSZCZ;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        PRZEDM.FIGHTBLUSZCZ;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLNOC-UL.CIEMNA');
+          WriteLn('WSCHOD-BLUSZCZ');
+          WriteLn('ZACHOD-BLUSZCZ');
+          WriteLn('POLODNIE-BLUSZCZ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLNOC' then MIECHO := 75;
+        if wpisz = 'WSCHOD' then MIECHO := 78;
+        if wpisz = 'ZACHOD' then MIECHO := 79;
+        if wpisz = 'POLODNIE' then MIECHO := 80;
+      until MIECHO <> 77;
 
     end;
 { img 0xC3ED..0xC51E: inline context 78 }
     if MIECHO = 78 then begin
 
-  WriteLn('WSZEDLES W GASZCZ ROSLIN I KWIATOW');
-  WriteLn('NIE MA CO OPISYWAC WYSTARCZY POWIEDZIEC ZE JEST TU BYDLO CHWASTOW');
-  PRZEDM.BLUSZCZ;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    PRZEDM.FIGHTBLUSZCZ;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('ZACHOD-BLUSZCZ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'ZACHOD' then MIECHO := 77;
-  until MIECHO <> 78;
+      WriteLn('WSZEDLES W GASZCZ ROSLIN I KWIATOW');
+      WriteLn('NIE MA CO OPISYWAC WYSTARCZY POWIEDZIEC ZE JEST TU BYDLO CHWASTOW');
+      PRZEDM.BLUSZCZ;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        PRZEDM.FIGHTBLUSZCZ;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('ZACHOD-BLUSZCZ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'ZACHOD' then MIECHO := 77;
+      until MIECHO <> 78;
 
     end;
 { img 0xC532..0xC663: inline context 79 }
     if MIECHO = 79 then begin
 
-  WriteLn('SLYSZYSZ POKRZYWE KTORA POZERA BEZBRONNY SZCZAW .... OHYDA');
-  WriteLn('WOKOLO TAK CIEMNO,ZE GDYBY NIE JA JUZ DAWNO BYS ZGINA');
-  PRZEDM.BLUSZCZ;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    PRZEDM.FIGHTBLUSZCZ;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-BLUSZCZ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 77;
-  until MIECHO <> 79;
+      WriteLn('SLYSZYSZ POKRZYWE KTORA POZERA BEZBRONNY SZCZAW .... OHYDA');
+      WriteLn('WOKOLO TAK CIEMNO,ZE GDYBY NIE JA JUZ DAWNO BYS ZGINA');
+      PRZEDM.BLUSZCZ;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        PRZEDM.FIGHTBLUSZCZ;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-BLUSZCZ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 77;
+      until MIECHO <> 79;
 
     end;
 { img 0xC677..0xC982: inline context 80 }
     if MIECHO = 80 then begin
 
-  WriteLn('CHOC TO MALO PRAWDOPODOBNE TUTAJ JEST JESZCZE CIEMNIEJ');
-  WriteLn('PONADTO W NIEKTORYCH MIEJSCACH ZNAJDUJE SIE BLOTO I INNE BZDURY');
-  WriteLn('NA SRODKU ZNAJDUJE SIE STUDNIA I MALO CZYTELNY NAPIS');
-  PRZEDM.BLUSZCZ;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    PRZEDM.FIGHTBLUSZCZ;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLNOC-BLUSZCZ');
-      WriteLn('WSCHOD-BLUSZCZ');
-      WriteLn('ZACHOD-BLUSZCZ');
-      WriteLn('POLODNIE-BLUSZCZ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLNOC' then MIECHO := 77;
-    if wpisz = 'ZACHOD' then MIECHO := 81;
-    if wpisz = 'WSCHOD' then MIECHO := 82;
-    if wpisz = 'POLODNIE' then MIECHO := 83;
-    if wpisz = 'PATRZ NAPIS' then
-      WriteLn('PISZE TUTAJ : '#2'A'#2'RZY'#2' D'#2' S'#2'UDN'#2' (MOWILEM ZE MALO CZYTELNY)');
-    if wpisz = 'PATRZ STUDNIA' then begin
-        PRZEDM.FUKS := Random(3) + 1;
-        WriteLn('ZAGLADASZ DO SRODKA STUDNI,COS TAM JEST,WYCI'#164'GASZ ', PRZEDM.FUKS,
+      WriteLn('CHOC TO MALO PRAWDOPODOBNE TUTAJ JEST JESZCZE CIEMNIEJ');
+      WriteLn('PONADTO W NIEKTORYCH MIEJSCACH ZNAJDUJE SIE BLOTO I INNE BZDURY');
+      WriteLn('NA SRODKU ZNAJDUJE SIE STUDNIA I MALO CZYTELNY NAPIS');
+      PRZEDM.BLUSZCZ;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        PRZEDM.FIGHTBLUSZCZ;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLNOC-BLUSZCZ');
+          WriteLn('WSCHOD-BLUSZCZ');
+          WriteLn('ZACHOD-BLUSZCZ');
+          WriteLn('POLODNIE-BLUSZCZ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLNOC' then MIECHO := 77;
+        if wpisz = 'ZACHOD' then MIECHO := 81;
+        if wpisz = 'WSCHOD' then MIECHO := 82;
+        if wpisz = 'POLODNIE' then MIECHO := 83;
+        if wpisz = 'PATRZ NAPIS' then
+          WriteLn('PISZE TUTAJ : '#2'A'#2'RZY'#2' D'#2' S'#2'UDN'#2' (MOWILEM ZE MALO CZYTELNY)');
+        if wpisz = 'PATRZ STUDNIA' then begin
+          PRZEDM.FUKS := Random(3) + 1;
+          WriteLn('ZAGLADASZ DO SRODKA STUDNI,COS TAM JEST,WYCI'#164'GASZ ', PRZEDM.FUKS,
               ' MONET!');
-        FORSA := FORSA + PRZEDM.FUKS;
-      PRZEDM.FUKS := Random(100);
-      if PRZEDM.FUKS < 10 then begin
-        WriteLn('JAK SMIESZ PODBIERAC MOJE SWIETOSCI , GIN CHAMIE , GIN');
-        ENERGIA := ENERGIA - 40;
-        WriteLn('ODDAWAJ MOJE PIENIADZE !!!');
-        FORSA := FORSA - 100;
-        if FORSA < 0 then FORSA := 0;
-      end;
-    end;
-  until MIECHO <> 80;
+          FORSA := FORSA + PRZEDM.FUKS;
+          PRZEDM.FUKS := Random(100);
+          if PRZEDM.FUKS < 10 then begin
+            WriteLn('JAK SMIESZ PODBIERAC MOJE SWIETOSCI , GIN CHAMIE , GIN');
+            ENERGIA := ENERGIA - 40;
+            WriteLn('ODDAWAJ MOJE PIENIADZE !!!');
+            FORSA := FORSA - 100;
+            if FORSA < 0 then FORSA := 0;
+          end;
+        end;
+      until MIECHO <> 80;
 
     end;
 { img 0xC98C..0xCAC7: inline context 81 }
     if MIECHO = 81 then begin
 
-  WriteLn('PRZEDZIERASZ SIE PRZEZ CALY TEN SYF I NAJCHETNIEJ BYS');
-  WriteLn('TERAZ PORZYCZY'#157' KOSIARKI OD SWEGO KOLEGI TOMKA');
-  PRZEDM.BLUSZCZ;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    PRZEDM.FIGHTBLUSZCZ;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-BLUSZCZ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 80;
-  until MIECHO <> 81;
+      WriteLn('PRZEDZIERASZ SIE PRZEZ CALY TEN SYF I NAJCHETNIEJ BYS');
+      WriteLn('TERAZ PORZYCZY'#157' KOSIARKI OD SWEGO KOLEGI TOMKA');
+      PRZEDM.BLUSZCZ;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        PRZEDM.FIGHTBLUSZCZ;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-BLUSZCZ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 80;
+      until MIECHO <> 81;
 
     end;
 { img 0xCAD1..0xCC0C: inline context 82 }
     if MIECHO = 82 then begin
 
-  WriteLn('W TEJ KOMNACIE JEST ZNACZNIE JASNIEJ A TO DLATEGO ZE NAPROMIENIOWANE');
-  WriteLn('I ZMUTOWANE ROSLINY ID'#164' W TWYM KIERUNKU');
-  PRZEDM.BLUSZCZ;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    PRZEDM.FIGHTBLUSZCZ;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('ZACHOD-BLUSZCZ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'ZACHOD' then MIECHO := 80;
-  until MIECHO <> 82;
+      WriteLn('W TEJ KOMNACIE JEST ZNACZNIE JASNIEJ A TO DLATEGO ZE NAPROMIENIOWANE');
+      WriteLn('I ZMUTOWANE ROSLINY ID'#164' W TWYM KIERUNKU');
+      PRZEDM.BLUSZCZ;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        PRZEDM.FIGHTBLUSZCZ;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('ZACHOD-BLUSZCZ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'ZACHOD' then MIECHO := 80;
+      until MIECHO <> 82;
 
     end;
     if MIECHO = 83 then POKOJ83;
 { img 0xCC22..0xCDFB: context 84, entrance toward the cave }
     if MIECHO = 84 then begin
 
-  WriteLn('TO CIEKAWE ZE WCZESNIEJ NIE ZAUWAZYLES TYCH KRARZAKOW PRZEDZIERASZ');
-  WriteLn('SIE PRZEZ ICH GASZCZ WYGLADA TO NA NIEZBYT MILA KRAINE');
-  WriteLn('DALES NA ZACHOD WIDZISZ JAKIES PODEJRZANE BUDOWLE , A NA POLODNIE BRRRR.');
-  WriteLn('NA POLODNIE JAK GDYBY KTOS SIE OBZERAL , ALE BARDZO GLOSNO I NIEBEZPIECZNIE');
-  PRZEDM.BLUSZCZ;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    PRZEDM.FIGHTBLUSZCZ;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-BLUSZCZ');
-      WriteLn('ZACHOD-BUDYNEK');
-      WriteLn('POLODNIE-WEJSCIE DO GROTY ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 83;
-    if wpisz = 'ZACHOD' then MIECHO := 85;
-    if wpisz = 'POLODNIE' then MIECHO := 87;
-  until MIECHO <> 84;
+      WriteLn('TO CIEKAWE ZE WCZESNIEJ NIE ZAUWAZYLES TYCH KRARZAKOW PRZEDZIERASZ');
+      WriteLn('SIE PRZEZ ICH GASZCZ WYGLADA TO NA NIEZBYT MILA KRAINE');
+      WriteLn('DALES NA ZACHOD WIDZISZ JAKIES PODEJRZANE BUDOWLE , A NA POLODNIE BRRRR.');
+      WriteLn('NA POLODNIE JAK GDYBY KTOS SIE OBZERAL , ALE BARDZO GLOSNO I NIEBEZPIECZNIE');
+      PRZEDM.BLUSZCZ;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        PRZEDM.FIGHTBLUSZCZ;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-BLUSZCZ');
+          WriteLn('ZACHOD-BUDYNEK');
+          WriteLn('POLODNIE-WEJSCIE DO GROTY ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 83;
+        if wpisz = 'ZACHOD' then MIECHO := 85;
+        if wpisz = 'POLODNIE' then MIECHO := 87;
+      until MIECHO <> 84;
 
     end;
 { img 0xCDFB..0xCFC2: context 87, poisonous passage }
     if MIECHO = 87 then begin
 
-  WriteLn('MLASK , MLASK KTOS RZECZYWISCIE SIE OBZERA CZY JESTES 100% PEWNY IZ');
-  WriteLn('CHCESZ SIE ZAGLEBIC W TE NIEBADANE CZELUSCIE PIEKIELNE?, MOZE LEPIEJ WROC');
-   PRZEDM.FUKS := Random(100);
-   if PRZEDM.FUKS < 40 then begin
-     WriteLn('NO PIEKNIE WLAZLES W JAKIES TOKSYCZNE SUBSTANCJE ,AAA, TO PARZY TRACISZ ',
+      WriteLn('MLASK , MLASK KTOS RZECZYWISCIE SIE OBZERA CZY JESTES 100% PEWNY IZ');
+      WriteLn('CHCESZ SIE ZAGLEBIC W TE NIEBADANE CZELUSCIE PIEKIELNE?, MOZE LEPIEJ WROC');
+      PRZEDM.FUKS := Random(100);
+      if PRZEDM.FUKS < 40 then begin
+        WriteLn('NO PIEKNIE WLAZLES W JAKIES TOKSYCZNE SUBSTANCJE ,AAA, TO PARZY TRACISZ ',
            25 - ZRE, '%');
-     ENERGIA := ENERGIA - 25 + ZRE;
-  end;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-GROTA');
-      WriteLn('POLNOC-PODEJRZANE KRZAKI');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLNOC' then MIECHO := 84;
-    if wpisz = 'POLODNIE' then MIECHO := 88;
-  until MIECHO <> 87;
+        ENERGIA := ENERGIA - 25 + ZRE;
+      end;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-GROTA');
+          WriteLn('POLNOC-PODEJRZANE KRZAKI');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLNOC' then MIECHO := 84;
+        if wpisz = 'POLODNIE' then MIECHO := 88;
+      until MIECHO <> 87;
 
     end;
 { img 0xCFCC..0xD1FB: context 88, giant man-eating plant encounter }
     if MIECHO = 88 then begin
 
-  WriteLn('MOJ BOZE , COZ TO JEST , NA TRONIE SIEDZI 20 RAZY WIEKSZA OD CIEBIE POKRZYWA');
-  WriteLn('WOKOL NIEJ UWIJAJA SIE PRACOWITE MLECZE DOSTARCZAJAC JEJ SWIEZEGO ');
-  WriteLn('MIESA LUDZKIEGO !!! , UWIELBIA ONA MOZGI KTORE WYSSYSA JAK PYSZNY PUDDING ');
-  WriteLn('W PEWNYM MOMECIE ZAUWAZA CIEBIE - WITAJ WEDROWCZE PODOBAM CI SIE? - (TAK,NIE)');
-  Write('TAK lub NIE >');
-  ReadLn(wpisz);
-  WriteLn('NO TO GIN!!!');
-  repeat
-    WROGEN := 200; WROGZRE := 15; WROGSIL := 18;
-    PRZEDM.FIREBALL := 5; PRZEDM.POISON := 1;
-    WALKA;
-  if WROGEN < 0 then begin
-    PRZEDM.LISTEKZYSK;
-    PRZEDM.PIGULKAZYSK;
-    PRZEDM.SCROLLPORZYSK;
-    if PRZEDM.DUNQ <> 0 then PRZEDM.DUNQ := PRZEDM.DUNQ - 50;
-  end;
-  if ENERGIA > 0 then begin
-    WriteLn('UFFF,TO BYLA PRZYGODA,WOKOL GROMADZILY SIE SETKI MLECZOW - NIE MIALBYS SZANS');
-    MIECHO := 87;
-  end;
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-WEJSCIE DO GROTY');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLODNIE' then MIECHO := 87;
-  until MIECHO <> 88;
+      WriteLn('MOJ BOZE , COZ TO JEST , NA TRONIE SIEDZI 20 RAZY WIEKSZA OD CIEBIE POKRZYWA');
+      WriteLn('WOKOL NIEJ UWIJAJA SIE PRACOWITE MLECZE DOSTARCZAJAC JEJ SWIEZEGO ');
+      WriteLn('MIESA LUDZKIEGO !!! , UWIELBIA ONA MOZGI KTORE WYSSYSA JAK PYSZNY PUDDING ');
+      WriteLn('W PEWNYM MOMECIE ZAUWAZA CIEBIE - WITAJ WEDROWCZE PODOBAM CI SIE? - (TAK,NIE)');
+      Write('TAK lub NIE >');
+      ReadLn(wpisz);
+      WriteLn('NO TO GIN!!!');
+      repeat
+        WROGEN := 200; WROGZRE := 15; WROGSIL := 18;
+        PRZEDM.FIREBALL := 5; PRZEDM.POISON := 1;
+        WALKA;
+        if WROGEN < 0 then begin
+          PRZEDM.LISTEKZYSK;
+          PRZEDM.PIGULKAZYSK;
+          PRZEDM.SCROLLPORZYSK;
+          if PRZEDM.DUNQ <> 0 then PRZEDM.DUNQ := PRZEDM.DUNQ - 50;
+        end;
+        if ENERGIA > 0 then begin
+          WriteLn('UFFF,TO BYLA PRZYGODA,WOKOL GROMADZILY SIE SETKI MLECZOW - NIE MIALBYS SZANS');
+          MIECHO := 87;
+        end;
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-WEJSCIE DO GROTY');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLODNIE' then MIECHO := 87;
+      until MIECHO <> 88;
 
     end;
 { img 0xD1FB..0xD41D: context 85, living door }
     if MIECHO = 85 then begin
 
-  WriteLn('DO DOBRA WYGLADA TO NA JAKIS DOM , WEJDZMY DO SRODKA ');
-  WriteLn('GOD DAMN , A NIECH MNIE MA MATEUSZ W SWOJEJ OPIECE , TE DRZWI ZYJA !!!');
-  if MONSTRA.DRZWI <> 0 then
-    WriteLn('DRZWI WYCIAGAJA SWE DREWNIANE RECE W TWYM KIERUNKU MOWIAC : NIE WPUSZCZE');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    if wpisz = 'ZABIJ DRZWI' then begin
-      if MONSTRA.DRZWI <> 0 then begin
-        PRZEDM.NEASY;
-        if ENERGIA > 0 then MONSTRA.DRZWI := 0;
-      end;
-    end;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-PODEJRZANE KRZAKI');
+      WriteLn('DO DOBRA WYGLADA TO NA JAKIS DOM , WEJDZMY DO SRODKA ');
+      WriteLn('GOD DAMN , A NIECH MNIE MA MATEUSZ W SWOJEJ OPIECE , TE DRZWI ZYJA !!!');
       if MONSTRA.DRZWI <> 0 then
-        WriteLn('ZACHOD-GDYBY NIE TE CHOLERNE DRZWI ... ');
-      if MONSTRA.DRZWI = 0 then
-        WriteLn('ZACHOD-WEJSCIE DO DOMKU');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 84;
-    if (wpisz = 'ZACHOD') and (MONSTRA.DRZWI = 0) then MIECHO := 86;
-    if (wpisz = 'ZACHOD') and (MONSTRA.DRZWI <> 0) then
-      WriteLn('SPROBOJ OMINAC TE MEGA-PRZYPAKOWANE DRZWI KTORYCH BY SIE HE-MAN NIE POWSTYDZIL');
-  until MIECHO <> 85;
+        WriteLn('DRZWI WYCIAGAJA SWE DREWNIANE RECE W TWYM KIERUNKU MOWIAC : NIE WPUSZCZE');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        if wpisz = 'ZABIJ DRZWI' then begin
+          if MONSTRA.DRZWI <> 0 then begin
+            PRZEDM.NEASY;
+            if ENERGIA > 0 then MONSTRA.DRZWI := 0;
+          end;
+        end;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-PODEJRZANE KRZAKI');
+          if MONSTRA.DRZWI <> 0 then
+            WriteLn('ZACHOD-GDYBY NIE TE CHOLERNE DRZWI ... ');
+          if MONSTRA.DRZWI = 0 then
+            WriteLn('ZACHOD-WEJSCIE DO DOMKU');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 84;
+        if (wpisz = 'ZACHOD') and (MONSTRA.DRZWI = 0) then MIECHO := 86;
+        if (wpisz = 'ZACHOD') and (MONSTRA.DRZWI <> 0) then
+          WriteLn('SPROBOJ OMINAC TE MEGA-PRZYPAKOWANE DRZWI KTORYCH BY SIE HE-MAN NIE POWSTYDZIL');
+      until MIECHO <> 85;
 
     end;
 { img 0xD427..0xD7F0: context 86, the old man's room }
     if MIECHO = 86 then begin
 
-  WriteLn('DOBRA JESTES W SRODKU BRAK OSWIETLENIA CIE NIE WZRUSZA , DOOKOLA ROZNE GARNKI');
-  if MONSTRA.STARUCH <> 0 then
-    WriteLn('W ROGU ZAUWAZASZ MALEGO WYGLODZONEGO ELFIEGO STARUCHA');
-  if MONSTRA.STARUCH = 0 then
-    WriteLn('WIDZISZ TU TYLKO PLASZCZ PO STARUCHU KTORY ZNIKNA W PRZESTRZEN');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    PRZEDM.KOMENDY;
-    if wpisz = 'DAWAJ KUNSZT' then KUNSZT := KUNSZT + 500;
-    if wpisz = 'PATRZ GARNKI' then
-      WriteLn('Z JEZOREM NA WIERZCHU PATRZYSZ DO GARNKOW LECZ NIC W NICH NIE MA');
-    if wpisz = 'ROZMAWIAJ STARUCH' then begin
-      if (WEKA > -30) and (FORSA < 200) and (PrzedmScrollPowrot = 0) then begin
-        WriteLn('STARUCH MOWI CI : HEJ KTO TY JESTES CZY ZE MAGICZNE DRZWI NIE POWSTRZYMALY CIE?');
-        WriteLn('MUSISZ BYC NIEZLYM WOJOWNIKIEM ,SPOXOLANDIA, GLODNY JESTEM PRZYNIES MI 4 WEKI ');
-        WriteLn('ORAZ OKOLO 200 KASY , A DAM CI TAKIE NUMERY O JAKICH CI SIE NIE SNILO....');
-      end;
-    end;
-    if wpisz = 'ROZMAWIAJ STARUCH' then begin
-      if (WEKA < -30) and (FORSA > 199) then begin
-        WriteLn('STARUCH MOWI CI : OOO JAKA PIEKNA WEKA ... MNIAM I DRUGA TRZECIA I CZWARTA');
-        WriteLn('TO BYLO DOBRE ZARCIE !!! , DAWAJ KASE , PIENIADZE !!! , CO SIE TAK GAPISZ?');
-        WriteLn('WYNOCHA STAD !!! MRAMMMARAMMARAMAAMMARAM BUM !! -T-E-L-E-P-O-R-T-Y');
-        WriteLn('WYGLADA ZE ZROBIL CIE W BUCA , A MOZE JEDNAK NIE , CO TO ? , SCROLL POWROTU');
-        WriteLn('I PIWSKO NA OSLODZENIE ZYCIA , NO TRUDNO PRZYNAJMNIEJ CZEGOS SIE NAUCZYLES');
-        MIECHO := 20;
-        PrzedmPiwo := PrzedmPiwo - 10;
-        WEKA := WEKA + 40;
-        FORSA := FORSA - 200;
-        PrzedmScrollPowrot := PrzedmScrollPowrot - 10;
-        KUNSZT := KUNSZT + 50;
-        PRZED := PRZED - 2;
-      end;
-    end;
-    if wpisz = 'ROZMAWIAJ STARUCH' then begin
-      if PrzedmScrollPowrot < 0 then begin
-        WriteLn('AAAA SPADAJ STAD BO CI KOSCI POLAMIE');
-        MIECHO := 16;
-      end;
-    end;
-    if wpisz = 'ZABIJ STARUCH' then begin
-      if MONSTRA.STARUCH <> 0 then begin
-        PRZEDM.SLABO;
-        MONSTRA.STARUCH := 0;
-        WriteLn('HMMM UBRANIE JEST , ALE CIALO GDZIES ZNIKNELO , WTEM SLYSZYSZ GLOS :');
-        WriteLn('--- TO BYL TWOJ BLAD --- , DOSTAJESZ OCMIENIA LECZ NIE WIESZ CO TO BYLO');
-        POZIOM := POZIOM - 1;
-      end;
-    end;
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-BUDYNEK');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 85;
-  until MIECHO <> 86;
+      WriteLn('DOBRA JESTES W SRODKU BRAK OSWIETLENIA CIE NIE WZRUSZA , DOOKOLA ROZNE GARNKI');
+      if MONSTRA.STARUCH <> 0 then
+        WriteLn('W ROGU ZAUWAZASZ MALEGO WYGLODZONEGO ELFIEGO STARUCHA');
+      if MONSTRA.STARUCH = 0 then
+        WriteLn('WIDZISZ TU TYLKO PLASZCZ PO STARUCHU KTORY ZNIKNA W PRZESTRZEN');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        PRZEDM.KOMENDY;
+        if wpisz = 'DAWAJ KUNSZT' then KUNSZT := KUNSZT + 500;
+        if wpisz = 'PATRZ GARNKI' then
+          WriteLn('Z JEZOREM NA WIERZCHU PATRZYSZ DO GARNKOW LECZ NIC W NICH NIE MA');
+        if wpisz = 'ROZMAWIAJ STARUCH' then begin
+          if (WEKA > -30) and (FORSA < 200) and (PrzedmScrollPowrot = 0) then begin
+            WriteLn('STARUCH MOWI CI : HEJ KTO TY JESTES CZY ZE MAGICZNE DRZWI NIE POWSTRZYMALY CIE?');
+            WriteLn('MUSISZ BYC NIEZLYM WOJOWNIKIEM ,SPOXOLANDIA, GLODNY JESTEM PRZYNIES MI 4 WEKI ');
+            WriteLn('ORAZ OKOLO 200 KASY , A DAM CI TAKIE NUMERY O JAKICH CI SIE NIE SNILO....');
+          end;
+        end;
+        if wpisz = 'ROZMAWIAJ STARUCH' then begin
+          if (WEKA < -30) and (FORSA > 199) then begin
+            WriteLn('STARUCH MOWI CI : OOO JAKA PIEKNA WEKA ... MNIAM I DRUGA TRZECIA I CZWARTA');
+            WriteLn('TO BYLO DOBRE ZARCIE !!! , DAWAJ KASE , PIENIADZE !!! , CO SIE TAK GAPISZ?');
+            WriteLn('WYNOCHA STAD !!! MRAMMMARAMMARAMAAMMARAM BUM !! -T-E-L-E-P-O-R-T-Y');
+            WriteLn('WYGLADA ZE ZROBIL CIE W BUCA , A MOZE JEDNAK NIE , CO TO ? , SCROLL POWROTU');
+            WriteLn('I PIWSKO NA OSLODZENIE ZYCIA , NO TRUDNO PRZYNAJMNIEJ CZEGOS SIE NAUCZYLES');
+            MIECHO := 20;
+            PrzedmPiwo := PrzedmPiwo - 10;
+            WEKA := WEKA + 40;
+            FORSA := FORSA - 200;
+            PrzedmScrollPowrot := PrzedmScrollPowrot - 10;
+            KUNSZT := KUNSZT + 50;
+            PRZED := PRZED - 2;
+          end;
+        end;
+        if wpisz = 'ROZMAWIAJ STARUCH' then begin
+          if PrzedmScrollPowrot < 0 then begin
+            WriteLn('AAAA SPADAJ STAD BO CI KOSCI POLAMIE');
+            MIECHO := 16;
+          end;
+        end;
+        if wpisz = 'ZABIJ STARUCH' then begin
+          if MONSTRA.STARUCH <> 0 then begin
+            PRZEDM.SLABO;
+            MONSTRA.STARUCH := 0;
+            WriteLn('HMMM UBRANIE JEST , ALE CIALO GDZIES ZNIKNELO , WTEM SLYSZYSZ GLOS :');
+            WriteLn('--- TO BYL TWOJ BLAD --- , DOSTAJESZ OCMIENIA LECZ NIE WIESZ CO TO BYLO');
+            POZIOM := POZIOM - 1;
+          end;
+        end;
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-BUDYNEK');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 85;
+      until MIECHO <> 86;
 
     end;
 { img 0xD7F0..0xD9CA: context 21 }
     if MIECHO = 21 then begin
 
-  WriteLn('JESTES NA ULICY NA ULICY SKLEPIKOWEJ - JAK SAMA NAZWA WZKAZUJE  ');
-  WriteLn('JEST TU PARE SKLEPIKOW KTORE BYC MOZE CI SIE PRZYDADZA');
-  PRZEDM.ULSKLEPIKOWA;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-CENTRUM MIASTA');
-      WriteLn('POLNOC-UL.SKLEPIKOWA');
-      WriteLn('WSCHOD-PIEKARNIA');
-      WriteLn('ZACHOD-ZBROJOWNIA');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLODNIE' then MIECHO := 20;
-    if wpisz = 'POLNOC' then MIECHO := 22;
-    if wpisz = 'WSCHOD' then MIECHO := 23;
-    if wpisz = 'ZACHOD' then MIECHO := 24;
-    WalkaMiasto; { img 0x11C2A }
-  until MIECHO <> 21;
+      WriteLn('JESTES NA ULICY NA ULICY SKLEPIKOWEJ - JAK SAMA NAZWA WZKAZUJE  ');
+      WriteLn('JEST TU PARE SKLEPIKOW KTORE BYC MOZE CI SIE PRZYDADZA');
+      PRZEDM.ULSKLEPIKOWA;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-CENTRUM MIASTA');
+          WriteLn('POLNOC-UL.SKLEPIKOWA');
+          WriteLn('WSCHOD-PIEKARNIA');
+          WriteLn('ZACHOD-ZBROJOWNIA');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLODNIE' then MIECHO := 20;
+        if wpisz = 'POLNOC' then MIECHO := 22;
+        if wpisz = 'WSCHOD' then MIECHO := 23;
+        if wpisz = 'ZACHOD' then MIECHO := 24;
+        WalkaMiasto; { img 0x11C2A }
+      until MIECHO <> 21;
 
     end;
 { img 0xD9CA..0xDBA4: context 22 }
     if MIECHO = 22 then begin
 
-  WriteLn('CIAGNIE SIE TEDY ULICA SKLEPIKOWA JEST TU JESZCZE PARE  ');
-  WriteLn('INTERESUJACYCH SKLEPOW. DALEJ CIAGNIE SIE KILKA ULIC....');
-  PRZEDM.ULSKLEPIKOWA;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-UL.SKLEPIKOWA');
-      WriteLn('POLNOC-ROZJAZD!');
-      WriteLn('WSCHOD-SKLEP WIELOBRANZOWY');
-      WriteLn('ZACHOD-SKLEP MAGICZNY  ');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLODNIE' then MIECHO := 21;
-    if wpisz = 'WSCHOD' then MIECHO := 25;
-    if wpisz = 'ZACHOD' then MIECHO := 26;
-    if wpisz = 'POLNOC' then MIECHO := 100;
-    WalkaMiasto; { img 0x11C2A }
-  until MIECHO <> 22;
+      WriteLn('CIAGNIE SIE TEDY ULICA SKLEPIKOWA JEST TU JESZCZE PARE  ');
+      WriteLn('INTERESUJACYCH SKLEPOW. DALEJ CIAGNIE SIE KILKA ULIC....');
+      PRZEDM.ULSKLEPIKOWA;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-UL.SKLEPIKOWA');
+          WriteLn('POLNOC-ROZJAZD!');
+          WriteLn('WSCHOD-SKLEP WIELOBRANZOWY');
+          WriteLn('ZACHOD-SKLEP MAGICZNY  ');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLODNIE' then MIECHO := 21;
+        if wpisz = 'WSCHOD' then MIECHO := 25;
+        if wpisz = 'ZACHOD' then MIECHO := 26;
+        if wpisz = 'POLNOC' then MIECHO := 100;
+        WalkaMiasto; { img 0x11C2A }
+      until MIECHO <> 22;
 
     end;
 { img 0xDBA4..0xDDA8: context 101 }
     if MIECHO = 101 then begin
 
-  WriteLn('IDZIESZ DROGA , MIASTA PO DRODZE MIJASZ DROGOWSKAZ . JEST TU O WIELE ');
-  WriteLn('NIEBEZPIECZNIEJ NIZ W MIESCIE PELNO TU ZEZIMIERZKOW ROZNEGO RODZAJU');
-  WriteLn('JESLI NIE CHCESZ MIEC KLOPOTOW LEPIEJ DOBRZE TRYMAJ SIE DROGI....');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-ROZJAZD!');
-      WriteLn('ZACHOD-DROGA');
-      WriteLn('POLNOC-LAS');
-      WriteLn('POLODNIE-LAS');
-    end;
-    if wpisz = 'PATRZ DROGOWSKAZ' then
-      WriteLn('WSCHOD - MIASTO , ZACHOD - SHIGGHLERATHR');
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 100;
-    if wpisz = 'ZACHOD' then MIECHO := 102;
-    if wpisz = 'POLNOC' then MIECHO := 104;
-  until MIECHO <> 101;
+      WriteLn('IDZIESZ DROGA , MIASTA PO DRODZE MIJASZ DROGOWSKAZ . JEST TU O WIELE ');
+      WriteLn('NIEBEZPIECZNIEJ NIZ W MIESCIE PELNO TU ZEZIMIERZKOW ROZNEGO RODZAJU');
+      WriteLn('JESLI NIE CHCESZ MIEC KLOPOTOW LEPIEJ DOBRZE TRYMAJ SIE DROGI....');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-ROZJAZD!');
+          WriteLn('ZACHOD-DROGA');
+          WriteLn('POLNOC-LAS');
+          WriteLn('POLODNIE-LAS');
+        end;
+        if wpisz = 'PATRZ DROGOWSKAZ' then
+          WriteLn('WSCHOD - MIASTO , ZACHOD - SHIGGHLERATHR');
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 100;
+        if wpisz = 'ZACHOD' then MIECHO := 102;
+        if wpisz = 'POLNOC' then MIECHO := 104;
+      until MIECHO <> 101;
 
     end;
 { img 0xDDA8..0xDF4C: context 102 }
     if MIECHO = 102 then begin
 
-  WriteLn('IDZIESZ DALEJ KAMIENISTA DROGA , BRZYDALA BI CI SIE JAKA BRYCZKA NALEPIEJ ');
-  WriteLn('MODEL SZKAPA 2000 , ALE COZ KONIE SA TYLKO DLA NAJBOGATSZYCH');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-DROGA');
-      WriteLn('ZACHOD-DROGA');
-      WriteLn('POLNOC-LAS');
-      WriteLn('POLODNIE-LAS');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 101;
-    if wpisz = 'ZACHOD' then MIECHO := 103;
-  until MIECHO <> 102;
+      WriteLn('IDZIESZ DALEJ KAMIENISTA DROGA , BRZYDALA BI CI SIE JAKA BRYCZKA NALEPIEJ ');
+      WriteLn('MODEL SZKAPA 2000 , ALE COZ KONIE SA TYLKO DLA NAJBOGATSZYCH');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-DROGA');
+          WriteLn('ZACHOD-DROGA');
+          WriteLn('POLNOC-LAS');
+          WriteLn('POLODNIE-LAS');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 101;
+        if wpisz = 'ZACHOD' then MIECHO := 103;
+      until MIECHO <> 102;
 
     end;
 { img 0xDF4C..0xE0F2: context 103 }
     if MIECHO = 103 then begin
 
-  WriteLn('CO TO ZA GLUPOTA ? DROGA SKRECA TROCHE W LEWO , TROCHE W PRAWO ALE ');
-  WriteLn('PRZECIEZ ROWNIE DOBRZE MOGLA BY ISC SRODKIEM , ZYSKALI BY NA TYM WSZYSCY');
-  WriteLn('A SZCZEGOLNIE TY ,  BO BOLA CIE NOGI OD TEGO CHODZENIA NIEMOZEBNIE');
-  WriteLn('UPS DROGA SIE KONCZY NA TEJ NIEPRZEPASTNEJ RZECE O DALSZEJ PODROZY NIE MA MOWY');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-DROGA');
-      WriteLn('POLNOC-LAS');
-      WriteLn('POLODNIE-LAS');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 102;
-  until MIECHO <> 103;
+      WriteLn('CO TO ZA GLUPOTA ? DROGA SKRECA TROCHE W LEWO , TROCHE W PRAWO ALE ');
+      WriteLn('PRZECIEZ ROWNIE DOBRZE MOGLA BY ISC SRODKIEM , ZYSKALI BY NA TYM WSZYSCY');
+      WriteLn('A SZCZEGOLNIE TY ,  BO BOLA CIE NOGI OD TEGO CHODZENIA NIEMOZEBNIE');
+      WriteLn('UPS DROGA SIE KONCZY NA TEJ NIEPRZEPASTNEJ RZECE O DALSZEJ PODROZY NIE MA MOWY');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-DROGA');
+          WriteLn('POLNOC-LAS');
+          WriteLn('POLODNIE-LAS');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 102;
+      until MIECHO <> 103;
 
     end;
     if MIECHO = 100 then POKOJ100;
 { img 0xE0FE..0xE2A1: inline context 23 }
     if MIECHO = 23 then begin
 
-  WriteLn('JESTES W PIEKARNI , SKLEP PRZESIAKNIETY JEST PRZYJEMNYM ZAPACHEM CHLEBA ');
-  WriteLn('PIEKARZ MILO SIE NA CIEBIE PATRZY WYCIERAJAC MAKE Z TWARZY');
-  WriteLn('NA SCIANIE  JEST PLAKAT CALY W MACE');
-  PRZEDM.ULSKLEPIKOWA;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'PATRZ PLAKAT' then begin
-      WriteLn('LISTA-LISTA DOSTEPNYCH RZECZY,KUP (PRZEDMIOT)-KUPUJESZ GO ');
-      WriteLn('PO ODEJSCIU OD LADY REKLAMACJI NIE UWZGLEDNIA SIE');
-    end;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('ZACHOD-ULICA SKLEPIKOWA');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'ZACHOD' then MIECHO := 21;
-    ZakupyPiekarnia;
-  until MIECHO <> 23;
+      WriteLn('JESTES W PIEKARNI , SKLEP PRZESIAKNIETY JEST PRZYJEMNYM ZAPACHEM CHLEBA ');
+      WriteLn('PIEKARZ MILO SIE NA CIEBIE PATRZY WYCIERAJAC MAKE Z TWARZY');
+      WriteLn('NA SCIANIE  JEST PLAKAT CALY W MACE');
+      PRZEDM.ULSKLEPIKOWA;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'PATRZ PLAKAT' then begin
+          WriteLn('LISTA-LISTA DOSTEPNYCH RZECZY,KUP (PRZEDMIOT)-KUPUJESZ GO ');
+          WriteLn('PO ODEJSCIU OD LADY REKLAMACJI NIE UWZGLEDNIA SIE');
+        end;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('ZACHOD-ULICA SKLEPIKOWA');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'ZACHOD' then MIECHO := 21;
+        ZakupyPiekarnia;
+      until MIECHO <> 23;
 
     end;
 { img 0xE2AB..0xE42B: inline context 24 }
     if MIECHO = 24 then begin
 
-  WriteLn('JESTES W ZBROJOWNI - SKLEP NIEDAWNO ZOSTAL OTWARTY');
-  WriteLn('SPRZEDAWCA(BRZYDKA AURA) STARA SIE WCISNAC CI JAKIS TOWAR ');
-  WriteLn('NA SCIANIE WISI PLAKAT');
-  PRZEDM.ULSKLEPIKOWA;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    ZakupyZbrojownia; { img 0x13E8E }
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-ULICA SKLEPIKOWA');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 21;
-    if wpisz = 'PATRZ PLAKAT' then
-      WriteLn('LISTA,KUP XXX I SPRZEDAJ XXX TO JEST DOSTEPNE W TYM SKLEPIE ');
-    WalkaMiasto; { img 0x11C2A }
-  until MIECHO <> 24;
+      WriteLn('JESTES W ZBROJOWNI - SKLEP NIEDAWNO ZOSTAL OTWARTY');
+      WriteLn('SPRZEDAWCA(BRZYDKA AURA) STARA SIE WCISNAC CI JAKIS TOWAR ');
+      WriteLn('NA SCIANIE WISI PLAKAT');
+      PRZEDM.ULSKLEPIKOWA;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        ZakupyZbrojownia; { img 0x13E8E }
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-ULICA SKLEPIKOWA');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 21;
+        if wpisz = 'PATRZ PLAKAT' then
+          WriteLn('LISTA,KUP XXX I SPRZEDAJ XXX TO JEST DOSTEPNE W TYM SKLEPIE ');
+        WalkaMiasto; { img 0x11C2A }
+      until MIECHO <> 24;
 
     end;
 { img 0xE435..0xE599: inline context 25 }
     if MIECHO = 25 then begin
 
-  WriteLn('WSZEDLES DO SKLEPU WIELOBRANZOWEGO,STWIERDZASZ OBECNOSC SPRZEDAWCY');
-  WriteLn('NA DRZWIACH ZOSTALA WYWIESZONA WYWIESZKA');
-  PRZEDM.ULSKLEPIKOWA;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('ZACHOD-ULICA SKLEPIKOWA');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'ZACHOD' then MIECHO := 22;
-    if wpisz = 'PATRZ WYWIESZKA' then
-      WriteLn('* SKLEP OTWARTY DO ODWOLANIA *');
-    WalkaMiasto; { img 0x11C2A }
-    ZakupySklepWielobranzowy; { img 0x143A5 }
-  until MIECHO <> 25;
+      WriteLn('WSZEDLES DO SKLEPU WIELOBRANZOWEGO,STWIERDZASZ OBECNOSC SPRZEDAWCY');
+      WriteLn('NA DRZWIACH ZOSTALA WYWIESZONA WYWIESZKA');
+      PRZEDM.ULSKLEPIKOWA;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('ZACHOD-ULICA SKLEPIKOWA');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'ZACHOD' then MIECHO := 22;
+        if wpisz = 'PATRZ WYWIESZKA' then
+          WriteLn('* SKLEP OTWARTY DO ODWOLANIA *');
+        WalkaMiasto; { img 0x11C2A }
+        ZakupySklepWielobranzowy; { img 0x143A5 }
+      until MIECHO <> 25;
 
     end;
 { img 0xE5A3..0xE6EB: inline context 26; transaction at img 0x14ADD }
     if MIECHO = 26 then begin
 
-  WriteLn('WCHODZISZ DO SKLEPU ALE NICZEGO TU NIE MA POZA SPRZEDAWCA I JEGO TOWAREM');
-  PRZEDM.ULSKLEPIKOWA;
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-ULICA SKLEPIKOWA');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 22;
-    if wpisz = 'PATRZ PLAKAT' then
-      WriteLn('* OTWARTE Z POWODU CHOROBY *');
-    ZakupySklepMagiczny;
-    WalkaMiasto; { img 0x11C2A }
-  until MIECHO <> 26;
+      WriteLn('WCHODZISZ DO SKLEPU ALE NICZEGO TU NIE MA POZA SPRZEDAWCA I JEGO TOWAREM');
+      PRZEDM.ULSKLEPIKOWA;
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-ULICA SKLEPIKOWA');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 22;
+        if wpisz = 'PATRZ PLAKAT' then
+          WriteLn('* OTWARTE Z POWODU CHOROBY *');
+        ZakupySklepMagiczny;
+        WalkaMiasto; { img 0x11C2A }
+      until MIECHO <> 26;
 
     end;
 { img 0xE6F5..0xE854: inline context 31 }
     if MIECHO = 31 then begin
 
-  WriteLn('IDAC ULICA DLUGA NA POLNOC SPOSTRZEGASZ DOLINE ROZRYWEK');
-  WriteLn('A NA POLODNIE BASNIOWY GAJ...........');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('WSCHOD-ULICA DLUGA');
-      WriteLn('POLNOC-DOLINA ROZRYWEK');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'WSCHOD' then MIECHO := 30;
-    if wpisz = 'POLNOC' then MIECHO := 60;
-  until MIECHO <> 31;
+      WriteLn('IDAC ULICA DLUGA NA POLNOC SPOSTRZEGASZ DOLINE ROZRYWEK');
+      WriteLn('A NA POLODNIE BASNIOWY GAJ...........');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('WSCHOD-ULICA DLUGA');
+          WriteLn('POLNOC-DOLINA ROZRYWEK');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'WSCHOD' then MIECHO := 30;
+        if wpisz = 'POLNOC' then MIECHO := 60;
+      until MIECHO <> 31;
 
     end;
     if MIECHO = 60 then POKOJ60;
@@ -2355,25 +2346,25 @@ L1028_PoUcieczce16:
 { img 0xE86D..0xEA0B: inline context 32; MINIARENA owns cells 33..57 }
     if MIECHO = 32 then begin
 
-  WriteLn('CZESC TO ARENA PRZYCHODZA TU TACY JAK TY PO TO ABY MORDOWAC');
-  WriteLn('!!!!!O NIE!!!!!!!! TO STRASZNE!!! ( SIE DAL NABRAC ) (NAPISZ PATRZ PLAKAT');
-  repeat
-    Write(ENERGIA, '%.', KUNSZT, '>');
-    ReadLn(wpisz);
-    if wpisz = 'MODE' then PRZEDM.MODE;
-    if wpisz = 'PATRZ PLAKAT' then begin
-      WriteLn('NA PLAKACIE PISZE');
-      WriteLn('NIE ATAKUJ LUDZI I ZWIERZAT Z ZOO CHYBA ZE MASZ 3 LEVEL( LUB WYZEJ :P)');
-    end;
-    if wpisz = 'EXIT' then begin
-      WriteLn('DOSTEPNE WYJSCIA:');
-      WriteLn('POLODNIE-ULICA DLUGA');
-      WriteLn('POLNOC-ARENA');
-    end;
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-    if wpisz = 'POLODNIE' then MIECHO := 30;
-    if wpisz = 'POLNOC' then MIECHO := 33;
-  until MIECHO <> 32;
+      WriteLn('CZESC TO ARENA PRZYCHODZA TU TACY JAK TY PO TO ABY MORDOWAC');
+      WriteLn('!!!!!O NIE!!!!!!!! TO STRASZNE!!! ( SIE DAL NABRAC ) (NAPISZ PATRZ PLAKAT');
+      repeat
+        Write(ENERGIA, '%.', KUNSZT, '>');
+        ReadLn(wpisz);
+        if wpisz = 'MODE' then PRZEDM.MODE;
+        if wpisz = 'PATRZ PLAKAT' then begin
+          WriteLn('NA PLAKACIE PISZE');
+          WriteLn('NIE ATAKUJ LUDZI I ZWIERZAT Z ZOO CHYBA ZE MASZ 3 LEVEL( LUB WYZEJ :P)');
+        end;
+        if wpisz = 'EXIT' then begin
+          WriteLn('DOSTEPNE WYJSCIA:');
+          WriteLn('POLODNIE-ULICA DLUGA');
+          WriteLn('POLNOC-ARENA');
+        end;
+        if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
+        if wpisz = 'POLODNIE' then MIECHO := 30;
+        if wpisz = 'POLNOC' then MIECHO := 33;
+      until MIECHO <> 32;
 
     end;
     { Called unconditionally at img 0xEA15; MINIARENA guards contexts 33..57. }
@@ -2381,203 +2372,203 @@ L1028_PoUcieczce16:
     if MIECHO = MIECHO_Smierc then Smierc; { near call at img 0xEA22 -> 0x36F4 }
     if ENERGIA > MAXE then ENERGIA := MAXE; { img 0xEA25..0xEA34 }
     if MIECHO = MIECHO_Podswiadomosc then begin
-    if MMIECZ = PRZEDM.MIECHO2 then
-      WriteLn('W TWYM POKOJU LEZY !STARY! ZARDZEWIALY MIECZ');
-    if MTARCZA = PRZEDM.MIECHO2 then
-      WriteLn('W TYM POKOJU ZNAJDUJE SIE !MALA! TARCZA');
-    if SERCE = PRZEDM.MIECHO2 then
-      WriteLn('W TYM POKOJU ZNAJDUJE SIE ZAKRWAWIONE !SERCE!');
-    if DYPLOM = PRZEDM.MIECHO2 then
-      WriteLn('W TYM POKOJU ZNAJDUJE SIE !DYPLOM! MUD SZKOLY');
-    if FAJKA = PRZEDM.MIECHO2 then
-      WriteLn('TU LEZY !FAJKA!');
-L1012_ZachetaPodswiadomosc: Write(ENERGIA, '%.', KUNSZT, '>'); { img 0xEAF8..0xEB31 }
-    ReadLn(wpisz);
+      if MMIECZ = PRZEDM.MIECHO2 then
+        WriteLn('W TWYM POKOJU LEZY !STARY! ZARDZEWIALY MIECZ');
+      if MTARCZA = PRZEDM.MIECHO2 then
+        WriteLn('W TYM POKOJU ZNAJDUJE SIE !MALA! TARCZA');
+      if SERCE = PRZEDM.MIECHO2 then
+        WriteLn('W TYM POKOJU ZNAJDUJE SIE ZAKRWAWIONE !SERCE!');
+      if DYPLOM = PRZEDM.MIECHO2 then
+        WriteLn('W TYM POKOJU ZNAJDUJE SIE !DYPLOM! MUD SZKOLY');
+      if FAJKA = PRZEDM.MIECHO2 then
+        WriteLn('TU LEZY !FAJKA!');
+      L1012_ZachetaPodswiadomosc: Write(ENERGIA, '%.', KUNSZT, '>'); { img 0xEAF8..0xEB31 }
+      ReadLn(wpisz);
 
-    if wpisz = 'PAMIETAJ' then ZapiszPostac; { save routine starts img 0x2BA1 }
-    if wpisz = 'SCAN' then
-      WriteLn('FUNKCJA BEDZIE DOSTEPNA ZA DWA LATA , I TAK ZGINIESZ , I TAK :) ');
-    if wpisz = 'CZYSC EKRAN' then ClrScr; { img 0xEB99..0xEBAF }
-    if wpisz = 'DAWAJ EN' then ENERGIA := ENERGIA + 200;
-    if wpisz = 'ZABIERAJ KASE' then FORSA := FORSA - 100;
+      if wpisz = 'PAMIETAJ' then ZapiszPostac; { save routine starts img 0x2BA1 }
+      if wpisz = 'SCAN' then
+        WriteLn('FUNKCJA BEDZIE DOSTEPNA ZA DWA LATA , I TAK ZGINIESZ , I TAK :) ');
+      if wpisz = 'CZYSC EKRAN' then ClrScr; { img 0xEB99..0xEBAF }
+      if wpisz = 'DAWAJ EN' then ENERGIA := ENERGIA + 200;
+      if wpisz = 'ZABIERAJ KASE' then FORSA := FORSA - 100;
 
-    if wpisz = 'USTAW SZ' then begin
-      PRZEDM.ILOSC := 0;
-      PRO := 0;
-      FUKSROLL := 0;
-    end;
-    if wpisz = 'ZDEJMUJ' then begin
-      PRZEDM.CIALO := 0;
-      JakaBron := 0;
-      JakaTarcza := 0; { DGROUP word 0x60, shield-equipped flag in this branch }
-      PRZEDM.JAKIEUB := '';
-      MMIECZ := -10;
-      MTARCZA := -10;
-      SIL := SIL - 1;
-    end;
-
-    if wpisz = 'EXIT' then WriteLn('NAPISZ UNMODE ');
-    if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
-
-    if wpisz = 'JA' then PokazPostac;
-    PRZEDM.BRANIE; { img 0xEC9B -> PRZEDM:0x5A36 item pickup/drop dispatch }
-    if ZapisanoGre = 1 then begin
-      wpisz := 'ZDOLNOSCI'; { img 0xECA7: short-string assign via System:0x900 }
-      ZapisanoGre := 0;
-      WriteLn(PRZEDM.MIECHO2, ' MIECHO!');
-    end;
-    if wpisz = 'UZYJ PIWO' then begin
-      if PrzedmPiwo <= -10 then begin
-        PrzedmPiwo := PrzedmPiwo + 10;
-        WriteLn('GDY POCZULES AMBROZJE W USTACH ODZYSKALES 10 MANY ZAS GDY GO WYPILES 10% E.');
-        PRZEDM.PRZED := PRZEDM.PRZED - 1;
-        ENERGIA := ENERGIA + 10;
-        MANA := MANA + 10;
+      if wpisz = 'USTAW SZ' then begin
+        PRZEDM.ILOSC := 0;
+        PRO := 0;
+        FUKSROLL := 0;
       end;
-    end;
-    if wpisz = 'UZYJ STARY' then begin
-      if (MMIECZ = -10) and (JakaBron = 0) then begin
-        MMIECZ := -100;
-        JakaBron := 1;
-        WriteLn('UZYWASZ STAREGO ZARDZEWIALEGO MIECZA JAKO BRONI');
-        SIL := SIL + 1;
-        FUKSROLL := FUKSROLL + 3;
-      end;
-    end;
-    if wpisz = 'ODLOZ STARY' then begin
-      if (MMIECZ = -100) and (JakaBron = 1) then begin
-        MMIECZ := -10;
+      if wpisz = 'ZDEJMUJ' then begin
+        PRZEDM.CIALO := 0;
         JakaBron := 0;
-        WriteLn('CHOWASZ STARY ZARDZEWIALY MIECZ I NIE UZYWASZ GO JAKO BRONI');
-        SIL := SIL - 1;
-        FUKSROLL := FUKSROLL - 3;
-      end;
-    end;
-    if wpisz = 'UZYJ MALA' then begin
-      if (JakaTarcza = 0) and (MTARCZA = -10) then begin
-        JakaTarcza := 1;
-        PRO := PRO + 15;
-        PRZEDM.ILOSC := PRZEDM.ILOSC + 1;
-        MTARCZA := -100;
-        WriteLn('UZYWASZ MALEJ TARCZY JAKO TARCZY');
-      end;
-    end;
-    if wpisz = 'ODLOZ MALA' then begin
-      if (JakaTarcza = 1) and (MTARCZA = -100) then begin
-        JakaTarcza := 0;
-        PRO := PRO - 15;
-        PRZEDM.ILOSC := PRZEDM.ILOSC - 1;
+        JakaTarcza := 0; { DGROUP word 0x60, shield-equipped flag in this branch }
+        PRZEDM.JAKIEUB := '';
+        MMIECZ := -10;
         MTARCZA := -10;
-        WriteLn('JUZ NIE UZYWASZ MALEJ TARCZY JAKO TARCZY');
+        SIL := SIL - 1;
       end;
-    end;
 
-    { Unit procedures supply the remaining recovered item effects. }
-    PRZEDM.UZYWANIE;
+      if wpisz = 'EXIT' then WriteLn('NAPISZ UNMODE ');
+      if wpisz = 'WYJSCIE' then goto L1025_Wyjscie;
 
-    if wpisz = 'ZWIEJ' then begin
-      if ZWIEJ > 0 then begin
-        WriteLn('PONIZEJ ILU ENERGII CHCESZ UCIEKAC?');
-        ReadLn(PRZEDM.WIMP);
+      if wpisz = 'JA' then PokazPostac;
+      PRZEDM.BRANIE; { img 0xEC9B -> PRZEDM:0x5A36 item pickup/drop dispatch }
+      if ZapisanoGre = 1 then begin
+        wpisz := 'ZDOLNOSCI'; { img 0xECA7: short-string assign via System:0x900 }
+        ZapisanoGre := 0;
+        WriteLn(PRZEDM.MIECHO2, ' MIECHO!');
       end;
-    end;
-    if wpisz = 'SPIJ' then begin
-      GodzinySnu := 0;
-      repeat
-        GodzinySnu := GodzinySnu + 1;
-        Delay(5000);
-        WriteLn('SPISZ JUZ ', GodzinySnu, ' GODZIN');
-        KUNSZT := KUNSZT - 20;
-        ENERGIA := ENERGIA + 10;
-      until KeyPressed;
-      WriteLn('PO OBUDZENIU STWIERDZILES ZE ZYSKALES ', GodzinySnu * 10,
-            ' ENERGI I STRACILES ', (20 * GodzinySnu) - Random(2 * GodzinySnu), ' KUNSZTU');
-      KUNSZT := KUNSZT + Random(2 * GodzinySnu);
-      if GodzinySnu > 4 then begin
-        WriteLn('DLUGI SEN DODATKOWO POZWOLIL CI ODPOCZAC : ZYSKALES ', MAD, 'ENERGI');
-        ENERGIA := ENERGIA + MAD;
-      end;
-      if GodzinySnu > 8 then begin
-        WriteLn('PELNOWARTOSCIOWY SEN SPOWODOWAL SUPER ZYSK : ', MAD * 2, 'ENERGI');
-        ENERGIA := ENERGIA + (MAD * 2);
-      end;
-      if ENERGIA > MAXE then ENERGIA := MAXE;
-    end;
-    if wpisz = 'POROWNAJ' then begin
-      if PRZEDM.POR > 0 then begin
-        PRZEDM.FUKS := Random(100);
-        if PRZEDM.POR > PRZEDM.FUKS then begin
-          PRZEDM.POROWNANIE;
-          MANA := MANA - 10;
-        end
-        else begin
-          WriteLn('POPELNILES PEWNE BLEDY I NIE UDALO SIE WYKONAC CZARU');
-          MANA := MANA - 5;
+      if wpisz = 'UZYJ PIWO' then begin
+        if PrzedmPiwo <= -10 then begin
+          PrzedmPiwo := PrzedmPiwo + 10;
+          WriteLn('GDY POCZULES AMBROZJE W USTACH ODZYSKALES 10 MANY ZAS GDY GO WYPILES 10% E.');
+          PRZEDM.PRZED := PRZEDM.PRZED - 1;
+          ENERGIA := ENERGIA + 10;
+          MANA := MANA + 10;
         end;
       end;
-    end;
-    if wpisz = 'DAWAJ KASE' then FORSA := FORSA + 5000;
-    if (wpisz = 'ODRZUC PACZEK') or (wpisz = 'ODRZUC CIASTKO') or
+      if wpisz = 'UZYJ STARY' then begin
+        if (MMIECZ = -10) and (JakaBron = 0) then begin
+          MMIECZ := -100;
+          JakaBron := 1;
+          WriteLn('UZYWASZ STAREGO ZARDZEWIALEGO MIECZA JAKO BRONI');
+          SIL := SIL + 1;
+          FUKSROLL := FUKSROLL + 3;
+        end;
+      end;
+      if wpisz = 'ODLOZ STARY' then begin
+        if (MMIECZ = -100) and (JakaBron = 1) then begin
+          MMIECZ := -10;
+          JakaBron := 0;
+          WriteLn('CHOWASZ STARY ZARDZEWIALY MIECZ I NIE UZYWASZ GO JAKO BRONI');
+          SIL := SIL - 1;
+          FUKSROLL := FUKSROLL - 3;
+        end;
+      end;
+      if wpisz = 'UZYJ MALA' then begin
+        if (JakaTarcza = 0) and (MTARCZA = -10) then begin
+          JakaTarcza := 1;
+          PRO := PRO + 15;
+          PRZEDM.ILOSC := PRZEDM.ILOSC + 1;
+          MTARCZA := -100;
+          WriteLn('UZYWASZ MALEJ TARCZY JAKO TARCZY');
+        end;
+      end;
+      if wpisz = 'ODLOZ MALA' then begin
+        if (JakaTarcza = 1) and (MTARCZA = -100) then begin
+          JakaTarcza := 0;
+          PRO := PRO - 15;
+          PRZEDM.ILOSC := PRZEDM.ILOSC - 1;
+          MTARCZA := -10;
+          WriteLn('JUZ NIE UZYWASZ MALEJ TARCZY JAKO TARCZY');
+        end;
+      end;
+
+    { Unit procedures supply the remaining recovered item effects. }
+      PRZEDM.UZYWANIE;
+
+      if wpisz = 'ZWIEJ' then begin
+        if ZWIEJ > 0 then begin
+          WriteLn('PONIZEJ ILU ENERGII CHCESZ UCIEKAC?');
+          ReadLn(PRZEDM.WIMP);
+        end;
+      end;
+      if wpisz = 'SPIJ' then begin
+        GodzinySnu := 0;
+        repeat
+          GodzinySnu := GodzinySnu + 1;
+          Delay(5000);
+          WriteLn('SPISZ JUZ ', GodzinySnu, ' GODZIN');
+          KUNSZT := KUNSZT - 20;
+          ENERGIA := ENERGIA + 10;
+        until KeyPressed;
+        WriteLn('PO OBUDZENIU STWIERDZILES ZE ZYSKALES ', GodzinySnu * 10,
+            ' ENERGI I STRACILES ', (20 * GodzinySnu) - Random(2 * GodzinySnu), ' KUNSZTU');
+        KUNSZT := KUNSZT + Random(2 * GodzinySnu);
+        if GodzinySnu > 4 then begin
+          WriteLn('DLUGI SEN DODATKOWO POZWOLIL CI ODPOCZAC : ZYSKALES ', MAD, 'ENERGI');
+          ENERGIA := ENERGIA + MAD;
+        end;
+        if GodzinySnu > 8 then begin
+          WriteLn('PELNOWARTOSCIOWY SEN SPOWODOWAL SUPER ZYSK : ', MAD * 2, 'ENERGI');
+          ENERGIA := ENERGIA + (MAD * 2);
+        end;
+        if ENERGIA > MAXE then ENERGIA := MAXE;
+      end;
+      if wpisz = 'POROWNAJ' then begin
+        if PRZEDM.POR > 0 then begin
+          PRZEDM.FUKS := Random(100);
+          if PRZEDM.POR > PRZEDM.FUKS then begin
+            PRZEDM.POROWNANIE;
+            MANA := MANA - 10;
+          end
+        else begin
+            WriteLn('POPELNILES PEWNE BLEDY I NIE UDALO SIE WYKONAC CZARU');
+            MANA := MANA - 5;
+          end;
+        end;
+      end;
+      if wpisz = 'DAWAJ KASE' then FORSA := FORSA + 5000;
+      if (wpisz = 'ODRZUC PACZEK') or (wpisz = 'ODRZUC CIASTKO') or
        (wpisz = 'ODRZUC SUCHA RACJA') or (wpisz = 'ODRZUC BULKA') or
        (wpisz = 'ODRZUC CHLEB') or (wpisz = 'ODRZUC WEKA') or
        (wpisz = 'ODRZUC SERCE') or (wpisz = 'ODRZUC BIGOS') then
-      WriteLn('JAK SMIESZ WYRZUCAC JEDZENIE!!! WSTYD MI ZA CIEBIE !!! NIE POZWOLE !!!');
-    if ((wpisz = 'POWROT') and (Powracanie > 0)) or
+        WriteLn('JAK SMIESZ WYRZUCAC JEDZENIE!!! WSTYD MI ZA CIEBIE !!! NIE POZWOLE !!!');
+      if ((wpisz = 'POWROT') and (Powracanie > 0)) or
        ((wpisz = 'UZYJ SCROLL POWROT') and (PrzedmScrollPowrot < 0)) then begin
-      PRZEDM.FUKS := Random(100);
-    if wpisz = 'UZYJ SCROLL POWROT' then begin
-      PRZEDM.FUKS := Random(1);
-      PrzedmScrollPowrot := PrzedmScrollPowrot + 10;
-      PRZEDM.PRZED := PRZEDM.PRZED - 1;
-    end;
+        PRZEDM.FUKS := Random(100);
+        if wpisz = 'UZYJ SCROLL POWROT' then begin
+          PRZEDM.FUKS := Random(1);
+          PrzedmScrollPowrot := PrzedmScrollPowrot + 10;
+          PRZEDM.PRZED := PRZEDM.PRZED - 1;
+        end;
         if PRZEDM.FUKS <= Powracanie then begin
-        WriteLn('OTWIERASZ MAGICZNY PORTAL KTORY PRZENOSI CIE DO MIASTA');
-        MANA := MANA - 15;
-        PRZEDM.MIECHO2 := 20;
+          WriteLn('OTWIERASZ MAGICZNY PORTAL KTORY PRZENOSI CIE DO MIASTA');
+          MANA := MANA - 15;
+          PRZEDM.MIECHO2 := 20;
+        end;
+        if (PRZEDM.FUKS > Powracanie) and (Powracanie + 30 > PRZEDM.FUKS) then begin
+          WriteLn('NIE UDAJE CI SIE OTWORZYC MAGICZNEGO PORTALU');
+          MANA := MANA - 5;
+        end;
+        if Powracanie + 29 < PRZEDM.FUKS then begin
+          WriteLn('OTWIERASZ MAGICZNY PORTAL KTORY JEDNAK PRZENOSI CIE DO INNEGO MIEJSCA');
+          MANA := MANA - 10;
+          PRZEDM.MIECHO2 := Random(100) + 1;
+        end;
       end;
-      if (PRZEDM.FUKS > Powracanie) and (Powracanie + 30 > PRZEDM.FUKS) then begin
-        WriteLn('NIE UDAJE CI SIE OTWORZYC MAGICZNEGO PORTALU');
-        MANA := MANA - 5;
+      if wpisz = 'UZYJ SCROLL POROWNYWANIE' then begin
+        if PRZEDM.SCROLLPOR < 0 then begin
+          PRZEDM.POROWNANIE;
+          MANA := MANA - 10;
+          PRZEDM.SCROLLPOR := PRZEDM.SCROLLPOR + 10;
+          PRZEDM.PRZED := PRZEDM.PRZED - 1;
+        end;
       end;
-      if Powracanie + 29 < PRZEDM.FUKS then begin
-        WriteLn('OTWIERASZ MAGICZNY PORTAL KTORY JEDNAK PRZENOSI CIE DO INNEGO MIEJSCA');
-        MANA := MANA - 10;
-        PRZEDM.MIECHO2 := Random(100) + 1;
+      if wpisz = 'KOP' then begin
+        if KOP > 0 then begin
+          WriteLn('ZADAM CI PARE PYTAN:');
+          WriteLn('1)PONIZEJ JAKIEJ ENERGI CHCESZ ZACZAC KOPAC');
+          ReadLn(PRZEDM.KOPHP);
+          WriteLn('2)DO JAKIECH ILOSCI MANA CHCESZ KOPAC');
+          ReadLn(PRZEDM.KOPM);
+        end;
       end;
-    end;
-    if wpisz = 'UZYJ SCROLL POROWNYWANIE' then begin
-      if PRZEDM.SCROLLPOR < 0 then begin
-        PRZEDM.POROWNANIE;
-        MANA := MANA - 10;
-        PRZEDM.SCROLLPOR := PRZEDM.SCROLLPOR + 10;
-        PRZEDM.PRZED := PRZEDM.PRZED - 1;
-      end;
-    end;
-    if wpisz = 'KOP' then begin
-      if KOP > 0 then begin
-        WriteLn('ZADAM CI PARE PYTAN:');
-        WriteLn('1)PONIZEJ JAKIEJ ENERGI CHCESZ ZACZAC KOPAC');
-        ReadLn(PRZEDM.KOPHP);
-        WriteLn('2)DO JAKIECH ILOSCI MANA CHCESZ KOPAC');
-        ReadLn(PRZEDM.KOPM);
-      end;
-    end;
-    if wpisz = 'JESTEM SPEEDE' then PRZEPUSTKA := PRZEPUSTKA - 10;
+      if wpisz = 'JESTEM SPEEDE' then PRZEPUSTKA := PRZEPUSTKA - 10;
 
-    if wpisz = 'ZDOLNOSCI' then begin
-      if (MAD > 10) and (SIL > 11) then WriteLn('KOPANIE       - ', KOP, '%');
-      if (MAD > 10) and (ZRE > 10) then WriteLn('UCIEKANIE     - ', ZWIEJ, '%');
-      if (MAD > 15) and (ZRE > 11) then WriteLn('PAROWANIE     - ', PAR, '%');
-      if MAD > 11 then WriteLn('POROWNYWANIE  - ', PRZEDM.POR, '%');
-      if MAD > 18 then WriteLn('POTRAWKI      - ', PotrawkiNiepotrzebnaZmiennaBug, '%');
-      if MAD > 19 then WriteLn('POWROT        - ', Powracanie, '%');
-    end;
-    PRZEDM.PIERDOLY; { img 0xF566: color/background command dispatch }
-    if wpisz = 'WLACZ POSTAC' then WczytajPostac;
+      if wpisz = 'ZDOLNOSCI' then begin
+        if (MAD > 10) and (SIL > 11) then WriteLn('KOPANIE       - ', KOP, '%');
+        if (MAD > 10) and (ZRE > 10) then WriteLn('UCIEKANIE     - ', ZWIEJ, '%');
+        if (MAD > 15) and (ZRE > 11) then WriteLn('PAROWANIE     - ', PAR, '%');
+        if MAD > 11 then WriteLn('POROWNYWANIE  - ', PRZEDM.POR, '%');
+        if MAD > 18 then WriteLn('POTRAWKI      - ', PotrawkiNiepotrzebnaZmiennaBug, '%');
+        if MAD > 19 then WriteLn('POWROT        - ', Powracanie, '%');
+      end;
+      PRZEDM.PIERDOLY; { img 0xF566: color/background command dispatch }
+      if wpisz = 'WLACZ POSTAC' then WczytajPostac;
     { At img 0xF5A1, UNMODE and UM both restore the saved room context. }
-    if ((wpisz = 'UNMODE') or (wpisz = 'UM')) then
-      MIECHO := PRZEDM.MIECHO2;
-    if MIECHO = MIECHO_Podswiadomosc then goto L1012_ZachetaPodswiadomosc;
+      if ((wpisz = 'UNMODE') or (wpisz = 'UM')) then
+        MIECHO := PRZEDM.MIECHO2;
+      if MIECHO = MIECHO_Podswiadomosc then goto L1012_ZachetaPodswiadomosc;
     end;
     { Reached after leaving MODE: img 0xF5B2 clears the combat flee flag. }
     PRZEDM.PASZOL := 0;

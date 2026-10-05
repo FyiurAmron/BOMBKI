@@ -166,7 +166,7 @@ begin
   until MIECHO <> 13;
 
 end;
-procedure POKOJE; { img 0x10B8D..0x10FFF; four separate guarded rooms }
+procedure POKOJE; { img 0x10B8D..0x10FFF; four separate cramped rooms }
 begin
   if MIECHO = 6 then begin
     WriteLn('JESTES W DOSYC CIASNYM POKOJU I NICZEGO TU NIEMA ');
