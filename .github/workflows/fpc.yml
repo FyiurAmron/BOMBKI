@@ -42,7 +42,8 @@ jobs:
       - name: Use published FPC Win64 cross image or build locally
         id: image
         run: |
-          IMAGE="ghcr.io/rzuf79/bombki-fpc-cross"
+          OWNER="${{ github.repository_owner }}"
+          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-cross"
           if docker pull "$IMAGE:latest"; then
             echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
           else
@@ -70,4 +71,86 @@ jobs:
         with:
           name: bombki-windows-x86_64
           path: build/fpc/BOMBKI-windows-x86_64.exe
+          if-no-files-found: error
+
+  android-arm64:
+    name: FPC Android arm64 APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use published FPC Android cross image or build locally
+        id: image
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-android"
+          if docker pull "$IMAGE:latest"; then
+            echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published image unavailable; building docker/fpc-android locally"
+            docker build -f docker/fpc-android/Dockerfile -t "$IMAGE:local" .
+            echo "image=$IMAGE:local" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          set -e
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125"
+
+      - name: Build BOMBKI (Android arm64)
+        # The cross image carries its own NDK copy; the one installed above is
+        # what build_apk.py needs for the JNI helper.
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/src -w /src \
+            "${{ steps.image.outputs.image }}" \
+            tools/build_fpc.py --target android --fpc fpc-android
+
+      - name: Hand the build output back to the runner
+        # The container runs as root, so everything it wrote under build/
+        # is root-owned and the runner cannot create build/apk.
+        run: sudo chown -R "$(id -u):$(id -g)" build
+
+      - name: Verify game library
+        run: |
+          set -e
+          test -s build/fpc/BOMBKI-android-arm64-v8a.so
+          file build/fpc/BOMBKI-android-arm64-v8a.so | grep -q "ELF 64-bit"
+          file build/fpc/BOMBKI-android-arm64-v8a.so | grep -q "ARM aarch64"
+          # The pty child finds the entry point by name.
+          "$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            --dyn-syms build/fpc/BOMBKI-android-arm64-v8a.so | grep -q "BombkiMain"
+
+      - name: Build APK
+        # apksigner/d8 are shell wrappers that exec java off PATH.
+        run: tools/build_apk.py
+
+      - name: Verify APK
+        run: |
+          set -e
+          test -s build/android/BOMBKI-debug-arm64-v8a.apk
+          "$ANDROID_HOME/build-tools/34.0.0/aapt2" dump badging \
+            build/android/BOMBKI-debug-arm64-v8a.apk | grep -q "package: name='fyi.uramron.bombki'"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt2" dump badging \
+            build/android/BOMBKI-debug-arm64-v8a.apk \
+            | grep -q "launchable-activity: name='fyi.uramron.bombki.MainActivity'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify \
+            build/android/BOMBKI-debug-arm64-v8a.apk
+          unzip -l build/android/BOMBKI-debug-arm64-v8a.apk \
+            | grep -q "lib/arm64-v8a/libbombki.so"
+
+      - name: Upload APK
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: bombki-android-arm64
+          path: build/android/BOMBKI-debug-arm64-v8a.apk
           if-no-files-found: error

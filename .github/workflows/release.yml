@@ -23,7 +23,8 @@ jobs:
       - name: Use published FPC Win64 cross image or build locally
         id: image
         run: |
-          IMAGE="ghcr.io/rzuf79/bombki-fpc-cross"
+          OWNER="${{ github.repository_owner }}"
+          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-cross"
           if docker pull "$IMAGE:latest"; then
             echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
           else
@@ -39,6 +40,49 @@ jobs:
             "${{ steps.image.outputs.image }}" \
             tools/build_fpc.py --target windows --fpc fpc-win64
 
+      - name: Use published FPC Android cross image or build locally
+        id: android_image
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-android"
+          if docker pull "$IMAGE:latest"; then
+            echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published image unavailable; building docker/fpc-android locally"
+            docker build -f docker/fpc-android/Dockerfile -t "$IMAGE:local" .
+            echo "image=$IMAGE:local" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          set -e
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125"
+
+      - name: Build BOMBKI (Android arm64)
+        # The cross image carries its own NDK copy; the one installed above is
+        # what build_apk.py needs for the JNI helper.
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/src -w /src \
+            "${{ steps.android_image.outputs.image }}" \
+            tools/build_fpc.py --target android --fpc fpc-android
+
+      - name: Hand the build output back to the runner
+        # The container runs as root, so everything it wrote under build/
+        # is root-owned and the runner cannot create build/apk.
+        run: sudo chown -R "$(id -u):$(id -g)" build
+
+      - name: Build APK
+        run: tools/build_apk.py
+
       - name: Verify executables
         run: |
           set -e
@@ -46,13 +90,25 @@ jobs:
           file build/fpc/BOMBKI-linux-x86_64 | grep -q "ELF 64-bit"
           test -s build/fpc/BOMBKI-windows-x86_64.exe
           file build/fpc/BOMBKI-windows-x86_64.exe | grep -qE "PE32\+ executable.*x86-64"
+          test -s build/fpc/BOMBKI-android-arm64-v8a.so
+          file build/fpc/BOMBKI-android-arm64-v8a.so | grep -q "ELF 64-bit"
+          file build/fpc/BOMBKI-android-arm64-v8a.so | grep -q "ARM aarch64"
+          test -s build/android/BOMBKI-debug-arm64-v8a.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify \
+            build/android/BOMBKI-debug-arm64-v8a.apk
 
       - name: Create GitHub release
+        # The APK is debug-signed, so it cannot be installed over a release
+        # build of the same package.
         run: |
-          ( cd build/fpc && sha256sum BOMBKI-linux-x86_64 BOMBKI-windows-x86_64.exe > SHA256SUMS )
+          ( cd build/fpc && sha256sum BOMBKI-linux-x86_64 BOMBKI-windows-x86_64.exe \
+            BOMBKI-android-arm64-v8a.so > SHA256SUMS
+            cd ../android && sha256sum BOMBKI-debug-arm64-v8a.apk >> ../fpc/SHA256SUMS )
           gh release create "${{ github.ref_name }}" \
             build/fpc/BOMBKI-linux-x86_64 \
             build/fpc/BOMBKI-windows-x86_64.exe \
+            build/fpc/BOMBKI-android-arm64-v8a.so \
+            build/android/BOMBKI-debug-arm64-v8a.apk \
             build/fpc/SHA256SUMS \
             --title "${{ github.ref_name }}" \
             --generate-notes

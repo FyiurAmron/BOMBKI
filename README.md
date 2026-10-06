@@ -17,6 +17,8 @@ tl;dr answer:
 
 - Bash & Python 3 for scripts.
 - Free Pascal (FPC) for a host-native build and tests.
+- For the Android build: an Android NDK, an Android SDK (platform +
+  build-tools) and a JDK 17+.
 - For genuine TP7 builds, a Turbo Pascal 7 installation and DOSBox-X. Set
   `TP7_ROOT` to the TP7 directory if it is not in a standard location.
 - DOSEMU2 is an optional DOS runtime. The following options disable KVM
@@ -46,6 +48,32 @@ Compile with genuine TP7 in DOSBox-X, without starting the game:
 ```sh
 python3 tools/build_tp7_dosbox.py --no-run
 ```
+
+Build the Android arm64 game library and package it into an APK:
+
+```sh
+tools/setup_fpc_android_cross.sh    # once: RTL units, ppca64, NDK cross tools
+tools/build_fpc.py --target android --fpc fpc-android
+tools/build_apk.py
+```
+
+The APK is written to `build/android/BOMBKI-debug-arm64-v8a.apk`. It bundles the
+game as a shared library and a small WebView wrapper (see `tools/android/`) that
+runs it in a pseudo terminal, because a Turbo Pascal 7 text-mode game needs a real
+tty rather than pipes. The APK is signed with a throwaway debug key unless
+`--keystore` points at one of your own, so it will not install over a
+release-signed build of the same package.
+
+Android is the only target that does not compile `_reconstructed/BOMBKI.PAS` as
+it stands: a loadable library needs its main block exported as a procedure, so
+`tools/build_fpc.py --target android` first runs `tools/android/make_library.py`
+to write that shape into a temporary copy, and the reconstruction keeps
+describing the DOS executable alone.
+
+`tools/setup_fpc_android_cross.sh` needs an NDK for the cross tools and the
+sysroot libraries; it downloads one into `build/tmp` when `ANDROID_NDK_ROOT`
+points nowhere. It also builds `ppca64`, FPC's aarch64 code generator, from the
+FPC sources, because distro FPC packages ship only the host's.
 
 Run the TP7 executable in DOSEMU2's terminal frontend without opening a window:
 
