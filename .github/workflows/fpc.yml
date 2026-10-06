@@ -224,34 +224,3 @@ jobs:
           name: bombki-android-arm64
           path: build/android/BOMBKI-debug-arm64-v8a.apk
           if-no-files-found: error
-
-  update-builds-json:
-    name: Update builds.json (project page)
-    # Only main builds feed the published page.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # Runs once every build in this workflow has succeeded.
-    needs: [linux-x86_64, windows-x86_64-cross, android-arm64]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Emit the build links
-        run: |
-          set -e
-          BASE="${{ github.server_url }}/${{ github.repository }}/releases/latest/download"
-          cat > builds.json <<EOF
-          {
-            "windows": "$BASE/BOMBKI-windows-x86_64.exe",
-            "linux": "$BASE/BOMBKI-linux-x86_64",
-            "android": "$BASE/BOMBKI-debug-arm64-v8a.apk"
-          }
-          EOF
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add builds.json
-          if ! git diff --cached --quiet; then
-            git commit -m "ci: update builds.json for the project page"
-            git push
-          fi

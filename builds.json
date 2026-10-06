@@ -1,0 +1,5 @@
+{
+  "windows": "https://github.com/FyiurAmron/BOMBKI-pascal-byte-perfect-reconstruction/releases/latest/download/BOMBKI-windows-x86_64.exe",
+  "linux": "https://github.com/FyiurAmron/BOMBKI-pascal-byte-perfect-reconstruction/releases/latest/download/BOMBKI-linux-x86_64",
+  "android": "https://github.com/FyiurAmron/BOMBKI-pascal-byte-perfect-reconstruction/releases/latest/download/BOMBKI-debug-arm64-v8a.apk"
+}
