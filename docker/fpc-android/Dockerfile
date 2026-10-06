@@ -1,4 +1,9 @@
-FROM ubuntu:24.04
+# The base image is pinned by digest, not by tag: a tag can be
+# re-pushed with different content, which would silently change
+# every build done "on the same base". To move to a newer Ubuntu
+# 24.04 image, update the digest and the helper images rebuild
+# (their cache key covers this file).
+FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 
 ENV DEBIAN_FRONTEND=noninteractive
 

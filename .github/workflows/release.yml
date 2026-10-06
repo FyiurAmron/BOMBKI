@@ -8,8 +8,85 @@ permissions:
   contents: write
 
 jobs:
+  windows-image:
+    name: Win64 cross image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Reuse or build the image
+        id: image
+        run: |
+          set -e
+          # GHCR repository names must be lowercase.
+          OWNER="${{ github.repository_owner }}"
+          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-cross"
+          # The image is keyed by the content it is built from: the
+          # Dockerfile and the tools/ it copies into itself. A matching
+          # image is reused as-is; only a missing one is built and
+          # published, so the next run on the same content reuses it.
+          TAG=$( (sha256sum docker/fpc-cross/Dockerfile; \
+                  git ls-files -z tools/ | sort -z | xargs -0 sha256sum) \
+                 | sha256sum | cut -c1-12 )
+          if docker pull "$IMAGE:$TAG"; then
+            echo "reusing $IMAGE:$TAG"
+          else
+            echo "no $IMAGE:$TAG yet; building it"
+            docker build -f docker/fpc-cross/Dockerfile -t "$IMAGE:$TAG" .
+            docker push "$IMAGE:$TAG"
+          fi
+          echo "image=$IMAGE:$TAG" >> "$GITHUB_OUTPUT"
+
+  android-image:
+    name: Android cross image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Reuse or build the image
+        id: image
+        run: |
+          set -e
+          # GHCR repository names must be lowercase.
+          OWNER="${{ github.repository_owner }}"
+          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-android"
+          # The image is keyed by the content it is built from: the
+          # Dockerfile and the tools/ it copies into itself. A matching
+          # image is reused as-is; only a missing one is built and
+          # published, so the next run on the same content reuses it.
+          TAG=$( (sha256sum docker/fpc-android/Dockerfile; \
+                  git ls-files -z tools/ | sort -z | xargs -0 sha256sum) \
+                 | sha256sum | cut -c1-12 )
+          if docker pull "$IMAGE:$TAG"; then
+            echo "reusing $IMAGE:$TAG"
+          else
+            echo "no $IMAGE:$TAG yet; building it"
+            docker build -f docker/fpc-android/Dockerfile -t "$IMAGE:$TAG" .
+            docker push "$IMAGE:$TAG"
+          fi
+          echo "image=$IMAGE:$TAG" >> "$GITHUB_OUTPUT"
+
   release:
     name: Build and release ${{ github.ref_name }}
+    # Waits for the image jobs: either the matching images
+    # already existed, or this run built and published them.
+    needs: [windows-image, android-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -19,39 +96,6 @@ jobs:
 
       - name: Build BOMBKI (Linux x86_64)
         run: tools/build_fpc.py --target linux
-
-      - name: Use published FPC Win64 cross image or build locally
-        id: image
-        run: |
-          OWNER="${{ github.repository_owner }}"
-          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-cross"
-          if docker pull "$IMAGE:latest"; then
-            echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "Published image unavailable; building docker/fpc-cross locally"
-            docker build -f docker/fpc-cross/Dockerfile -t "$IMAGE:local" .
-            echo "image=$IMAGE:local" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build BOMBKI (Win64)
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}":/src -w /src \
-            "${{ steps.image.outputs.image }}" \
-            tools/build_fpc.py --target windows --fpc fpc-win64
-
-      - name: Use published FPC Android cross image or build locally
-        id: android_image
-        run: |
-          OWNER="${{ github.repository_owner }}"
-          IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-android"
-          if docker pull "$IMAGE:latest"; then
-            echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "Published image unavailable; building docker/fpc-android locally"
-            docker build -f docker/fpc-android/Dockerfile -t "$IMAGE:local" .
-            echo "image=$IMAGE:local" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -66,13 +110,20 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125"
 
+      - name: Build BOMBKI (Win64)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/src -w /src \
+            "${{ needs.windows-image.outputs.image }}" \
+            tools/build_fpc.py --target windows --fpc fpc-win64
+
       - name: Build BOMBKI (Android arm64)
         # The cross image carries its own NDK copy; the one installed above is
         # what build_apk.py needs for the JNI helper.
         run: |
           docker run --rm \
             -v "${{ github.workspace }}":/src -w /src \
-            "${{ steps.android_image.outputs.image }}" \
+            "${{ needs.android-image.outputs.image }}" \
             tools/build_fpc.py --target android --fpc fpc-android
 
       - name: Hand the build output back to the runner
