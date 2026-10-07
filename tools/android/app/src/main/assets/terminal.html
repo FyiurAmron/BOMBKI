@@ -13,14 +13,56 @@
     background: #000;
     overflow: hidden;
   }
+  /* The mic toggle is positioned against this, so it stays an overlay and
+     the terminal keeps every one of its 80x25 columns. */
+  body {
+    position: relative;
+  }
   #terminal {
     height: 100%;
     width: 100%;
+  }
+  #mic {
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top));
+    right: calc(12px + env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #7f7f7f;
+    border-radius: 22px;
+    background: #1a1a1a;
+    /* Idle means "reachable", listening means "armed". Dimmed rather than
+       hidden so a player who expects the control can always find it. */
+    opacity: 0.45;
+    transition: opacity 120ms linear;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    z-index: 10;
+  }
+  #mic[aria-pressed="true"] {
+    opacity: 1;
+    border-color: #e0e0e0;
+  }
+  #mic .dot {
+    display: block;
+    width: 14px;
+    height: 14px;
+    margin: 14px auto;
+    border-radius: 7px;
+    background: #7f7f7f;
+  }
+  #mic[aria-pressed="true"] .dot {
+    background: #d04040;
   }
 </style>
 </head>
 <body>
 <div id="terminal"></div>
+<button id="mic" type="button" aria-pressed="false" aria-label="Voice input">
+  <span class="dot"></span>
+</button>
 <script src="vendor/xterm.js"></script>
 <script>
 (function () {
@@ -90,10 +132,172 @@
     term.write(decode(base64ToBytes(encoded)));
   };
 
+  // ---------------------------------------------------------------------
+  // Input filtering
+  //
+  // BOMBKI is a 1999 DOS game: it compares every command against an
+  // uppercase literal and never trims what it read, so a lowercase
+  // letter or a diacritic makes the command silently miss. Both the
+  // hardware keyboard and Android's voice input produce exactly that,
+  // so anything printable is folded down to [A-Z0-9 ] here. Voice input
+  // additionally appends to the line the player already spoke, which is
+  // why a trailing "ENTER" is handled below rather than in the game.
+  // ---------------------------------------------------------------------
+
+  // Polish plus the Latin-1 letters speech engines emit that NFD cannot
+  // split into a base letter and a combining mark.
+  var FOLD = {
+    'ł': 'l', 'Ł': 'L', 'đ': 'd', 'Đ': 'D',
+    'ø': 'o', 'Ø': 'O', 'ß': 'ss', 'æ': 'ae', 'Æ': 'AE',
+    'œ': 'oe', 'Œ': 'OE', 'þ': 'th', 'Þ': 'Th'
+  };
+
+  function fold(text) {
+    var out = '';
+    for (var i = 0; i < text.length; i += 1) {
+      var ch = text[i];
+      out += FOLD[ch] !== undefined ? FOLD[ch] : ch.normalize('NFD');
+    }
+    // Strip combining marks left by NFD, uppercase, then drop everything
+    // the game cannot match on.
+    return out.replace(/\p{Diacritic}/gu, '').toUpperCase();
+  }
+
+  // What the game is holding on its input line, as far as this filter can
+  // tell: the printable characters sent since the last Enter. The game
+  // cannot be asked what its line contains, and it compares commands with
+  // `=` without trimming, so a stray space or a spoken "ENTER" makes the
+  // command silently miss. Both are corrected by backing over them before
+  // Enter, never by hoping they were not sent.
+  var line = '';
+
+  function push(text) {
+    window.BombkiAndroid.sendInput(toBase64(text));
+  }
+
+  function erase(count) {
+    if (count > 0) {
+      push(new Array(count + 1).join('\b'));
+    }
+  }
+
+  // Submits the line, first removing whatever would stop the game from
+  // matching it: a spoken "ENTER" that already reached it, along with the
+  // space separating it from the command, or a trailing space. The game
+  // echoes what it receives and Crt honours BS as an erase.
+  function submit() {
+    var trimmed = line.replace(/ +$/, '');
+    var count;
+    if (/ENTER$/.test(trimmed)) {
+      count = trimmed.length - trimmed.replace(/ *ENTER$/, '').length;
+    } else {
+      count = line.length - trimmed.length;
+    }
+    erase(count);
+    line = '';
+    push('\r');
+  }
+
+  // Closes a word that ended without an explicit Enter, which is how a
+  // finished recognition phrase arrives. A spoken "ENTER" submits here
+  // rather than waiting for a keystroke the player believes they have
+  // already spoken.
+  function closeWord() {
+    if (/ENTER$/.test(line)) {
+      submit();
+    }
+  }
+
+  // Keys the game receives, and the folded text of a voice phrase.
+  function type(text) {
+    for (var i = 0; i < text.length; i += 1) {
+      var ch = text[i];
+      // xterm.js delivers arrows and Home/End as one escape sequence; send
+      // the remainder verbatim rather than folding its bytes as text.
+      if (ch === '\x1b') {
+        push(text.slice(i));
+        return;
+      }
+      // Enter, either pressed or synthesised.
+      if (ch === '\r' || ch === '\n') {
+        submit();
+        continue;
+      }
+      // The player's own backspace: it has to reach the game, and the
+      // tracked line has to shrink with it or the counts drift apart.
+      if (ch === '\b' || ch === '\x7f') {
+        push(ch);
+        line = line.slice(0, -1);
+        continue;
+      }
+      // Other control characters pass through untouched.
+      if (ch < ' ') {
+        push(ch);
+        continue;
+      }
+      var kept = fold(ch).replace(/[^A-Z0-9 ]/g, '');
+      if (kept === '') {
+        continue;
+      }
+      if (kept === ' ') {
+        // A spoken ENTER closes as soon as the space arrives, so
+        // "ENTER" followed by more speech still submits first.
+        if (/ +ENTER$/.test(line)) {
+          submit();
+        } else if (line !== '' && !/ $/.test(line)) {
+          // A space with no word in front of it would lead the line, and
+          // the game would read it as part of the command.
+          push(' ');
+          line += ' ';
+        }
+        continue;
+      }
+      push(kept);
+      line += kept;
+    }
+  }
+
   // xterm.js reports every key it sees, hardware and soft keyboard
   // alike, through onData, so this is the only input path needed.
   term.onData(function (data) {
-    window.BombkiAndroid.sendInput(toBase64(data));
+    type(data);
+  });
+
+  // A finished recognition result. Same folding and the same Enter
+  // handling as the keyboard, plus the closing that a phrase has no
+  // trailing keystroke to provide.
+  window.__bombkiSay = function (encoded) {
+    var text = new TextDecoder().decode(base64ToBytes(encoded));
+    type(text);
+    closeWord();
+  };
+
+  // ---------------------------------------------------------------------
+  // Voice toggle
+  // ---------------------------------------------------------------------
+
+  var mic = document.getElementById('mic');
+
+  function setListening(listening) {
+    mic.setAttribute('aria-pressed', listening ? 'true' : 'false');
+    mic.setAttribute('aria-label', listening ? 'Voice input on' : 'Voice input off');
+  }
+
+  // pointerdown/pointerup rather than click: preventDefault on pointerdown
+  // stops the tap from blurring the textarea xterm.js reads keystrokes from,
+  // which would dismiss the soft keyboard mid-command. The click still
+  // follows, so the toggle is driven from it.
+  mic.addEventListener('pointerdown', function (event) {
+    event.preventDefault();
+  });
+  mic.addEventListener('click', function () {
+    var on = mic.getAttribute('aria-pressed') !== 'true';
+    setListening(on);
+    if (on) {
+      window.BombkiAndroid.startVoice();
+    } else {
+      window.BombkiAndroid.stopVoice();
+    }
   });
 
   // Tell the Java side the terminal is live so it can replay whatever
@@ -101,6 +305,12 @@
   window.BombkiAndroid.ready();
 
   term.focus();
+
+  // Voice is the point of the build on a phone, so it starts armed. The
+  // mic permission prompt lands on top of the game rather than behind it,
+  // and a refusal just leaves the keyboard as the input path.
+  setListening(true);
+  window.BombkiAndroid.startVoice();
 })();
 </script>
 </body>

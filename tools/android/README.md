@@ -9,7 +9,7 @@ only so the sources are easy to browse.
 - `app/src/main/AndroidManifest.xml` - activity and packaging, `minSdk 21`
 - `app/src/main/java/io/github/fyiuramron/` - the launcher
 - `app/src/main/res/` - app label, theme, launcher icon
-- `app/src/main/assets/terminal.html` - xterm.js front end
+- `app/src/main/assets/terminal.html` - xterm.js front end, input filter and mic toggle
 - `native/pty.c` - pseudo terminal helper, compiled to `libbombkipty.so`
 - `make_library.py` - writes the library build of `_reconstructed/BOMBKI.PAS`
 
@@ -45,6 +45,50 @@ libraries is the path Android itself uses for JNI, so no policy blocks it.
 The fork still happens in C: the child needs the pty slave as its fds 0/1/2
 and the library call to happen after that, and by the time Java sees a
 `Process`, the descriptors are already fixed.
+
+## Voice input
+
+The game is a 1999 DOS program: it compares every command against an
+uppercase literal and compares with `=`, so it neither uppercases what
+it reads nor trims it. A lowercase letter, a diacritic or a trailing
+space makes the command silently do nothing - the splash says
+`KORZYSTAJ Z DUZYCH LITER` for exactly this reason. Voice input
+produces all three, so the terminal page folds anything printable down
+to `[A-Z0-9 ]` before it reaches the game: diacritics are stripped
+(`NFD` plus a small table for the letters that do not decompose, so
+`ł` becomes `l`), everything is uppercased, and anything else is
+dropped. The keyboard goes through the same path, so typing behaviour
+does not change.
+
+A spoken "ENTER" submits rather than typing itself. Voice appends to the
+line the player has already spoken - there is no "before" in which to
+remove it - so the letters do reach the game and are then backed out
+with `BS`, which Crt honours as an erase and echoes as `BS SP`. The
+separating space goes with them, because the game does not trim. This is
+why the filter tracks the line it has sent rather than only the current
+word: a trailing space has to be erased before any Enter, and the count
+has to stay in step with the player's own backspaces.
+
+The toggle is a button in the top-right of the terminal, chosen because
+the bottom of an 80x25 console is the live edge - prompt, newest output
+and cursor - and the top row is the oldest content on screen. It is an
+overlay rather than a strip so the pty keeps all 25 rows. It is driven
+from `pointerdown` with `preventDefault` so a tap never blurs the
+textarea xterm.js reads keystrokes from, which would dismiss the soft
+keyboard mid-command. Voice is on by default and the microphone
+permission is requested at startup; refusing it leaves the keyboard
+working.
+
+Android WebView has no Web Speech API, so `VoiceInput.java` wraps
+`SpeechRecognizer` and hands each finished phrase to
+`window.__bombkiSay`, base64 encoded for the same reason game output is.
+Sessions are restarted after each result or error, since the service
+ends them itself after a pause. Partial results are switched off: they
+would append the same words again with every interim guess. Recognition
+holds the microphone, so it is released when the activity is paused.
+A Vosk build (offline, no session restarts) only replaces that one
+class and the recognizer behind `__bombkiSay`; the class comment in
+`VoiceInput.java` records what else such a build has to change.
 
 ## Why the pty
 

@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.github.fyiuramron">
 
+    <!-- Voice input: spoken commands reach the game as keystrokes. The
+         keyboard remains the input path when this is refused, so the app
+         is not usable-restricted without it, hence optional. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+
     <application
         android:allowBackup="false"
         android:debuggable="true"
