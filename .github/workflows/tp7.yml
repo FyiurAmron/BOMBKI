@@ -1,0 +1,100 @@
+name: tp7-conformance
+
+# The reconstruction is meant to be byte-perfect, so the strongest check
+# available is the original compiler: rebuild _reconstructed/*.PAS with the
+# genuine TP7.01 TPC.EXE under DOSBox-X and compare the result with
+# _reference/. tools/build_tp7_dosbox.py fails the step unless TPC reported
+# four compiler banners, no errors, and all five artifacts, and
+# tools/compare_tp7_artifacts.py fails it unless the three TPUs and the EXE
+# are byte-identical to the 1999 originals.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tp7-image:
+    name: TP7 DOSBox-X image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        # Fork pull requests get a read-only token, so they build
+        # the image for this run alone instead of publishing it.
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Reuse or build the image
+        id: image
+        run: |
+          set -e
+          # GHCR repository names must be lowercase.
+          OWNER="${{ github.repository_owner }}"
+          IMAGE="ghcr.io/${OWNER,,}/bombki-tp7"
+          # The image is keyed by the content it is built from: the
+          # Dockerfile and the vendored TP7.01 payload it verifies and
+          # extracts. A matching image is reused as-is; only a missing one
+          # is built and published, so the next run on the same content
+          # reuses it. The reconstruction sources are not part of the key:
+          # the image holds no sources, the run mounts the checkout.
+          TAG=$( (sha256sum docker/tp7/Dockerfile; \
+                  git ls-files -z docker/tp7/tools | sort -z | xargs -0 sha256sum) \
+                 | sha256sum | cut -c1-12 )
+          if docker pull "$IMAGE:$TAG"; then
+            echo "reusing $IMAGE:$TAG"
+          else
+            echo "no $IMAGE:$TAG yet; building it"
+            docker build -f docker/tp7/Dockerfile -t "$IMAGE:$TAG" .
+            if [ "${{ github.event_name }}" = "pull_request" ] && \
+               [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+              echo "fork pull request: the image stays local"
+            else
+              docker push "$IMAGE:$TAG"
+            fi
+          fi
+          echo "image=$IMAGE:$TAG" >> "$GITHUB_OUTPUT"
+
+  tp7-conformance:
+    name: TP7 conformance sweep
+    # Waits for the image job: either the matching image already
+    # existed, or this run built and published it.
+    needs: tp7-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Rebuild the sources with genuine TP7
+        # The build script is the verdict on the compile itself: it checks
+        # the compiler banner, greps the log for errors and checks every
+        # artifact before it copies anything out, so a step that reaches the
+        # comparison has already proven the sources build with TPC.EXE.
+        # The timeout is a backstop against a DOSBox-X that never exits.
+        run: |
+          timeout --signal=KILL 600s docker run --rm \
+            -v "${{ github.workspace }}":/src -w /src \
+            "${{ needs.tp7-image.outputs.image }}" \
+            python3 tools/build_tp7_dosbox.py --no-run --output-dir build/tp7
+
+      - name: Hand the build output back to the runner
+        # The container runs as root, so everything it wrote under build/
+        # is root-owned and the runner cannot read it back otherwise.
+        run: sudo chown -R "$(id -u):$(id -g)" build
+
+      - name: Compare rebuilt units and EXE with the originals
+        run: python3 tools/compare_tp7_artifacts.py --candidate-dir build/tp7
+
+      - name: Upload sweep artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: tp7-sweep
+          path: build/tp7/
+          if-no-files-found: warn

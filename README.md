@@ -49,6 +49,20 @@ Compile with genuine TP7 in DOSBox-X, without starting the game:
 python3 tools/build_tp7_dosbox.py --no-run
 ```
 
+Check the TP7 result against the 1999 originals in `_reference/`, which is what
+the `tp7-conformance` workflow does in CI:
+
+```sh
+python3 tools/build_tp7_dosbox.py --no-run   # writes build/tp7
+python3 tools/compare_tp7_artifacts.py --candidate-dir build/tp7
+```
+
+All four artifacts - the three TPUs and `BOMBKI.EXE` - must come out
+byte-identical. The workflow builds the same sources with the same TP7.01
+compiler in `docker/tp7/Dockerfile`, whose vendored `TPC.EXE`/`TURBO.TPL` are
+the same files `tools/extract_tp701.sh` verifies, so the verdict never depends
+on a compiler download.
+
 Build the Android arm64 game library and package it into an APK:
 
 ```sh
