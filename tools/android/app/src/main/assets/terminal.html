@@ -195,6 +195,9 @@
   var TYPO = 'POLUDNIE';
   var CORRECT = 'POLODNIE';
 
+  // Easter egg: KURDE works like ENTER (submit the line).
+  var KURDE = 'KURDE';
+
   function trailingWord() {
     return line.slice(line.lastIndexOf(' ') + 1);
   }
@@ -215,7 +218,9 @@
   // Crt honours BS as an erase.
   function submit() {
     fixTypo();
-    var command = line.replace(/[-. ]*ENTER[-. ]*$/, '')
+    // Remove trailing ENTER or KURDE (the easter egg synonym), plus any
+    // separating punctuation/space, then send the command.
+    var command = line.replace(/[-. ]*(ENTER|KURDE)[-. ]*$/, '')
                       .replace(/[-. ]+$/, '');
     erase(line.length - command.length);
     line = '';
@@ -224,14 +229,14 @@
 
   // Closes a word that ended without an explicit Enter, which
   // is how a finished recognition phrase arrives. A spoken
-  // "ENTER" submits here rather than waiting for a keystroke
-  // the player believes they have already spoken. Anything
-  // else trailing - the period a recogniser leaves on "kup
-  // chleb." - is backed out, since the game compares the
+  // "ENTER" or "KURDE" submits here rather than waiting for a
+  // keystroke the player believes they have already spoken.
+  // Anything else trailing - the period a recogniser leaves on
+  // "kup chleb." - is backed out, since the game compares the
   // line as it stands. The word the phrase ends is closed,
   // so a typo in it is corrected here too.
   function closeWord() {
-    if (/ENTER[-. ]*$/.test(line)) {
+    if (/(ENTER|KURDE)[-. ]*$/.test(line)) {
       submit();
       return;
     }

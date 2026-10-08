@@ -143,6 +143,7 @@ final class VoiceInput implements RecognitionListener {
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, VOICE_LANGUAGE)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
                           VOICE_LANGUAGE)
+                .putExtra(RecognizerIntent.EXTRA_PROFANITY_FILTER, false)
                 .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
                 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         try {
