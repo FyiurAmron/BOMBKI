@@ -59,6 +59,15 @@ final class VoiceInput implements RecognitionListener {
     /** SpeechRecognizer is only usable from the thread that made it. */
     private SpeechRecognizer recognizer;
 
+    /**
+     * Language the commands are transcribed in. BOMBKI is a Polish
+     * game: every command it accepts is a Polish word, so a
+     * recogniser working in the device default - often English,
+     * since that is what most devices ship with - misses every
+     * command it hears. Without this extra the input is useless.
+     */
+    private static final String VOICE_LANGUAGE = "pl-PL";
+
     /** What the page's toggle asked for; recognition chases this. */
     private boolean wanted;
 
@@ -131,6 +140,9 @@ final class VoiceInput implements RecognitionListener {
         Intent request = new Intent(ACTION_RECOGNIZE)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                           RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE, VOICE_LANGUAGE)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
+                          VOICE_LANGUAGE)
                 .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
                 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         try {

@@ -139,9 +139,13 @@
   // uppercase literal and never trims what it read, so a lowercase
   // letter or a diacritic makes the command silently miss. Both the
   // hardware keyboard and Android's voice input produce exactly that,
-  // so anything printable is folded down to [A-Z0-9 ] here. Voice input
-  // additionally appends to the line the player already spoke, which is
-  // why a trailing "ENTER" is handled below rather than in the game.
+  // so anything printable is folded down to [A-Z0-9 .-] here - the
+  // game's own vocabulary uses a hyphen and a dot inside words
+  // (the POL-ELF race, MINI-BARMAN, D.J), so those two are kept
+  // while every other punctuation mark is dropped. Voice input
+  // additionally appends to the line the player already spoke,
+  // which is why a trailing "ENTER" is handled below rather than
+  // in the game.
   // ---------------------------------------------------------------------
 
   // Polish plus the Latin-1 letters speech engines emit that NFD cannot
@@ -181,30 +185,35 @@
     }
   }
 
-  // Submits the line, first removing whatever would stop the game from
-  // matching it: a spoken "ENTER" that already reached it, along with the
-  // space separating it from the command, or a trailing space. The game
-  // echoes what it receives and Crt honours BS as an erase.
+  // Submits the line, first removing whatever would stop the game
+  // from matching it: a spoken "ENTER" that already reached it,
+  // the space separating it from the command, and any trailing
+  // punctuation or space. The game echoes what it receives and
+  // Crt honours BS as an erase.
   function submit() {
-    var trimmed = line.replace(/ +$/, '');
-    var count;
-    if (/ENTER$/.test(trimmed)) {
-      count = trimmed.length - trimmed.replace(/ *ENTER$/, '').length;
-    } else {
-      count = line.length - trimmed.length;
-    }
-    erase(count);
+    var command = line.replace(/[-. ]*ENTER[-. ]*$/, '')
+                      .replace(/[-. ]+$/, '');
+    erase(line.length - command.length);
     line = '';
     push('\r');
   }
 
-  // Closes a word that ended without an explicit Enter, which is how a
-  // finished recognition phrase arrives. A spoken "ENTER" submits here
-  // rather than waiting for a keystroke the player believes they have
-  // already spoken.
+  // Closes a word that ended without an explicit Enter, which
+  // is how a finished recognition phrase arrives. A spoken
+  // "ENTER" submits here rather than waiting for a keystroke
+  // the player believes they have already spoken. Anything
+  // else trailing - the period a recogniser leaves on "kup
+  // chleb." - is backed out, since the game compares the
+  // line as it stands.
   function closeWord() {
-    if (/ENTER$/.test(line)) {
+    if (/ENTER[-. ]*$/.test(line)) {
       submit();
+      return;
+    }
+    var command = line.replace(/[-. ]+$/, '');
+    if (command !== line) {
+      erase(line.length - command.length);
+      line = command;
     }
   }
 
@@ -235,21 +244,27 @@
         push(ch);
         continue;
       }
-      var kept = fold(ch).replace(/[^A-Z0-9 ]/g, '');
+      var kept = fold(ch).replace(/[^A-Z0-9 .-]/g, '');
       if (kept === '') {
         continue;
       }
       if (kept === ' ') {
         // A spoken ENTER closes as soon as the space arrives, so
         // "ENTER" followed by more speech still submits first.
-        if (/ +ENTER$/.test(line)) {
+        if (/ENTER[-. ]*$/.test(line)) {
           submit();
         } else if (line !== '' && !/ $/.test(line)) {
-          // A space with no word in front of it would lead the line, and
-          // the game would read it as part of the command.
+          // A space with no word in front of it would lead the line,
+          // and the game would read it as part of the command.
           push(' ');
           line += ' ';
         }
+        continue;
+      }
+      // The game's own words contain a hyphen or a dot, so those
+      // have to reach it; a line cannot start with one, and
+      // doubling it serves nothing.
+      if (/[.-]/.test(kept) && (line === '' || /[.-]$/.test(line))) {
         continue;
       }
       push(kept);
@@ -263,11 +278,73 @@
     type(data);
   });
 
+  // ---------------------------------------------------------------------
+  // Scrolling
+  //
+  // The viewport reacts to the wheel and to PageUp/PageDown, but
+  // touch is bound only to mouse-event emulation, so a finger drag
+  // does not scroll. On a phone the bottom of a landscape 80x25
+  // screen can sit under a rounded corner or the on-screen keyboard,
+  // so a vertical drag scrolls the buffer here. The range is the
+  // whole scrollback, and scrolling back to the bottom reattaches
+  // to the live output.
+  // ---------------------------------------------------------------------
+  (function () {
+    var drag = null;
+    var pending = 0;
+
+    function rowHeight() {
+      return term.element.clientHeight / term.rows;
+    }
+
+    term.element.addEventListener('touchstart', function (event) {
+      if (event.touches.length !== 1) {
+        drag = null;
+        return;
+      }
+      drag = event.touches[0].clientY;
+      pending = 0;
+    }, { passive: true });
+
+    term.element.addEventListener('touchmove', function (event) {
+      if (drag === null || event.touches.length !== 1) {
+        return;
+      }
+      pending += drag - event.touches[0].clientY;
+      drag = event.touches[0].clientY;
+      // Whole lines only, so the buffer and the scrollbar agree;
+      // the remainder waits for the next move.
+      var lines = Math.trunc(pending / rowHeight());
+      if (lines !== 0) {
+        term.scrollLines(lines);
+        pending -= lines * rowHeight();
+        // Keep the page from scrolling or zooming instead.
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    term.element.addEventListener('touchend', function () {
+      drag = null;
+    }, { passive: true });
+  })();
+
   // A finished recognition result. Same folding and the same Enter
   // handling as the keyboard, plus the closing that a phrase has no
   // trailing keystroke to provide.
   window.__bombkiSay = function (encoded) {
     var text = new TextDecoder().decode(base64ToBytes(encoded));
+    if (text === '') {
+      return;
+    }
+    // The recogniser returns one utterance at a time and no
+    // leading space, so a phrase that follows text already on
+    // the line needs one, or the words glue together: "dawaj"
+    // then "5 monet" would otherwise reach the game as
+    // "DAWAJ5MONET", which is no command.
+    if (line !== '' && !/ $/.test(line)) {
+      push(' ');
+      line += ' ';
+    }
     type(text);
     closeWord();
   };

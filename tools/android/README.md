@@ -54,20 +54,34 @@ it reads nor trims it. A lowercase letter, a diacritic or a trailing
 space makes the command silently do nothing - the splash says
 `KORZYSTAJ Z DUZYCH LITER` for exactly this reason. Voice input
 produces all three, so the terminal page folds anything printable down
-to `[A-Z0-9 ]` before it reaches the game: diacritics are stripped
+to `[A-Z0-9 .-]` before it reaches the game: diacritics are stripped
 (`NFD` plus a small table for the letters that do not decompose, so
-`ł` becomes `l`), everything is uppercased, and anything else is
-dropped. The keyboard goes through the same path, so typing behaviour
-does not change.
+`ł` becomes `l`), everything is uppercased, and everything else is
+dropped. The two punctuation marks are kept because the game's own
+vocabulary uses them inside words - the `POL-ELF` race, `MINI-BARMAN`,
+`D.J` - so stripping them would make one of the six races unreachable
+at the very first prompt; no punctuation may lead the line or be
+doubled, and trailing punctuation is backed out when a phrase ends.
+The keyboard goes through the same path, so typing behaviour does not
+change.
 
 A spoken "ENTER" submits rather than typing itself. Voice appends to the
 line the player has already spoken - there is no "before" in which to
 remove it - so the letters do reach the game and are then backed out
 with `BS`, which Crt honours as an erase and echoes as `BS SP`. The
-separating space goes with them, because the game does not trim. This is
-why the filter tracks the line it has sent rather than only the current
-word: a trailing space has to be erased before any Enter, and the count
-has to stay in step with the player's own backspaces.
+separating space and any trailing punctuation go with them, because the
+game does not trim. This is why the filter tracks the line it has sent
+rather than only the current word: a trailing space has to be erased
+before any Enter, and the count has to stay in step with the player's
+own backspaces.
+
+Voice also arrives as separate utterances, each returned with no
+leading space, so a phrase that follows text already on the line is
+preceded by one; without that, "dawaj" then "5 monet" reaches the game
+as "DAWAJ5MONET", which is no command. Recognition is fixed to Polish
+(`pl-PL`): the game's commands are Polish words, and a recogniser
+working in the device default - often English - misses every command it
+hears.
 
 The toggle is a button in the top-right of the terminal, chosen because
 the bottom of an 80x25 console is the live edge - prompt, newest output
@@ -89,6 +103,18 @@ holds the microphone, so it is released when the activity is paused.
 A Vosk build (offline, no session restarts) only replaces that one
 class and the recognizer behind `__bombkiSay`; the class comment in
 `VoiceInput.java` records what else such a build has to change.
+
+## Scrolling
+
+The viewport reacts to the wheel and to PageUp/PageDown, but xterm.js
+binds touch only to mouse-event emulation, so a finger drag scrolls
+nothing. On a phone the bottom of a landscape 80x25 screen can sit
+under a rounded corner or the on-screen keyboard, so the page adds
+drag-to-scroll: a vertical drag moves the buffer in whole lines, over
+the whole scrollback (4000 lines - far past the 20 lines above and
+below the live view a cramped screen needs), and scrolling back to the
+bottom reattaches to the live output. Moves shorter than a line are
+left alone, so taps and selection still work.
 
 ## Why the pty
 
