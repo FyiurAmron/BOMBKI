@@ -185,12 +185,36 @@
     }
   }
 
+  // The game misprints its south command in one of its own
+  // prompts, so a player typing what they read sends
+  // POLUDNIE, which matches nothing. The spelling the game
+  // accepts is POLODNIE; once a word closes - a space, the
+  // end of a phrase, an Enter - the typo is erased and the
+  // accepted spelling sent in its place. The player sees the
+  // correction happen, and the game never sees the mistake.
+  var TYPO = 'POLUDNIE';
+  var CORRECT = 'POLODNIE';
+
+  function trailingWord() {
+    return line.slice(line.lastIndexOf(' ') + 1);
+  }
+
+  function fixTypo() {
+    if (trailingWord() !== TYPO) {
+      return;
+    }
+    erase(TYPO.length);
+    line = line.slice(0, line.length - TYPO.length) + CORRECT;
+    push(CORRECT);
+  }
+
   // Submits the line, first removing whatever would stop the game
   // from matching it: a spoken "ENTER" that already reached it,
   // the space separating it from the command, and any trailing
   // punctuation or space. The game echoes what it receives and
   // Crt honours BS as an erase.
   function submit() {
+    fixTypo();
     var command = line.replace(/[-. ]*ENTER[-. ]*$/, '')
                       .replace(/[-. ]+$/, '');
     erase(line.length - command.length);
@@ -204,7 +228,8 @@
   // the player believes they have already spoken. Anything
   // else trailing - the period a recogniser leaves on "kup
   // chleb." - is backed out, since the game compares the
-  // line as it stands.
+  // line as it stands. The word the phrase ends is closed,
+  // so a typo in it is corrected here too.
   function closeWord() {
     if (/ENTER[-. ]*$/.test(line)) {
       submit();
@@ -215,6 +240,7 @@
       erase(line.length - command.length);
       line = command;
     }
+    fixTypo();
   }
 
   // Keys the game receives, and the folded text of a voice phrase.
@@ -253,11 +279,15 @@
         // "ENTER" followed by more speech still submits first.
         if (/ENTER[-. ]*$/.test(line)) {
           submit();
-        } else if (line !== '' && !/ $/.test(line)) {
-          // A space with no word in front of it would lead the line,
-          // and the game would read it as part of the command.
-          push(' ');
-          line += ' ';
+        } else {
+          // The space closes the word in front of it.
+          fixTypo();
+          if (line !== '' && !/ $/.test(line)) {
+            // A space with no word in front of it would lead the line,
+            // and the game would read it as part of the command.
+            push(' ');
+            line += ' ';
+          }
         }
         continue;
       }
@@ -279,53 +309,112 @@
   });
 
   // ---------------------------------------------------------------------
-  // Scrolling
+  // Overscroll
   //
-  // The viewport reacts to the wheel and to PageUp/PageDown, but
-  // touch is bound only to mouse-event emulation, so a finger drag
-  // does not scroll. On a phone the bottom of a landscape 80x25
-  // screen can sit under a rounded corner or the on-screen keyboard,
-  // so a vertical drag scrolls the buffer here. The range is the
-  // whole scrollback, and scrolling back to the bottom reattaches
-  // to the live output.
+  // Drag scrolling is built into the viewport, but it stops
+  // at the last buffer line. On a phone the bottom of a
+  // landscape 80x25 screen can sit under a rounded corner
+  // or the on-screen keyboard, so a drag that begins at the
+  // bottom edge moves the screen up to 20 lines further
+  // instead: the last line can then sit near the top of
+  // the screen, with blank space below it. The buffer and
+  // the scroll position are left alone - the viewport keeps
+  // following live output - so the space is only a view of
+  // the same lines, and dragging back down returns to the
+  // live edge. A lift only ever starts at the bottom edge,
+  // and it gives way before the buffer scrolls again, so
+  // the two never fight.
   // ---------------------------------------------------------------------
   (function () {
-    var drag = null;
-    var pending = 0;
+    var MAX_OVERSCROLL = 20;
+    var container = term.element.parentElement;
+    var screen = term.element.querySelector('.xterm-screen');
+    var viewport = term.element.querySelector('.xterm-viewport');
+    if (!container || !screen || !viewport) {
+      return;
+    }
+
+    var over = 0;      // pixels the screen is lifted by
+    var lastY = null;  // the touch being followed, if any
 
     function rowHeight() {
       return term.element.clientHeight / term.rows;
     }
 
-    term.element.addEventListener('touchstart', function (event) {
-      if (event.touches.length !== 1) {
-        drag = null;
-        return;
-      }
-      drag = event.touches[0].clientY;
-      pending = 0;
-    }, { passive: true });
+    function atBottom() {
+      return viewport.scrollTop + viewport.clientHeight >=
+             viewport.scrollHeight - 1;
+    }
 
-    term.element.addEventListener('touchmove', function (event) {
-      if (drag === null || event.touches.length !== 1) {
+    function lift() {
+      screen.style.transform = over === 0 ? '' :
+        'translateY(' + String(-over) + 'px)';
+    }
+
+    // The buffer scrolled up: a lifted screen no longer
+    // lines up with it, so the lift ends. Output that
+    // arrives while at the bottom scrolls the buffer down
+    // instead, which a lift survives.
+    var lastPosition = 0;
+    term.onScroll(function (event) {
+      if (event.position < lastPosition && over > 0) {
+        over = 0;
+        lift();
+      }
+      lastPosition = event.position;
+    });
+
+    // Capture, on the container: a move that the lift is
+    // handling has to be kept from the viewport's own
+    // touch handling, which would scroll the buffer at the
+    // same time.
+    container.addEventListener('touchstart', function (event) {
+      lastY = event.touches.length === 1 ?
+        event.touches[0].clientY : null;
+    }, { capture: true, passive: true });
+
+    container.addEventListener('touchmove', function (event) {
+      if (lastY === null || event.touches.length !== 1) {
         return;
       }
-      pending += drag - event.touches[0].clientY;
-      drag = event.touches[0].clientY;
-      // Whole lines only, so the buffer and the scrollbar agree;
-      // the remainder waits for the next move.
-      var lines = Math.trunc(pending / rowHeight());
-      if (lines !== 0) {
-        term.scrollLines(lines);
-        pending -= lines * rowHeight();
-        // Keep the page from scrolling or zooming instead.
+      var y = event.touches[0].clientY;
+      var delta = lastY - y;  // > 0: dragging up, scrolling down
+      lastY = y;
+      if (delta === 0) {
+        return;
+      }
+      if (delta > 0) {
+        // Dragging up. At the bottom edge there is no
+        // buffer left to show, so the screen moves itself.
+        if (over > 0 || atBottom()) {
+          over = Math.min(over + delta, MAX_OVERSCROLL * rowHeight());
+          lift();
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      } else if (over > 0) {
+        // Dragging back down: the lift gives way first, and
+        // only once it is gone does the buffer scroll.
+        over = Math.max(0, over + delta);
+        lift();
         event.preventDefault();
+        event.stopPropagation();
       }
-    }, { passive: false });
+    }, { capture: true, passive: false });
 
-    term.element.addEventListener('touchend', function () {
-      drag = null;
-    }, { passive: true });
+    function release() {
+      lastY = null;
+    }
+    container.addEventListener('touchend', release,
+                               { capture: true, passive: true });
+    container.addEventListener('touchcancel', release,
+                               { capture: true, passive: true });
+
+    // A rotation changes what 20 lines is in pixels.
+    term.onResize(function () {
+      over = Math.min(over, MAX_OVERSCROLL * rowHeight());
+      lift();
+    });
   })();
 
   // A finished recognition result. Same folding and the same Enter

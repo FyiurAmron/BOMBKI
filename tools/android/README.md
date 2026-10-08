@@ -62,6 +62,13 @@ vocabulary uses them inside words - the `POL-ELF` race, `MINI-BARMAN`,
 `D.J` - so stripping them would make one of the six races unreachable
 at the very first prompt; no punctuation may lead the line or be
 doubled, and trailing punctuation is backed out when a phrase ends.
+One word is corrected outright: the game misprints its south
+command in its own instructions, so a player typing what they read
+sends `POLUDNIE`, which matches nothing. Once a word closes - a
+space, the end of a phrase, an Enter - the filter erases it and
+sends the `POLODNIE` the game accepts. The correction is visible
+in the echo, but the game itself never sees the mistake; the
+workaround can go when a later game release fixes the prompt.
 The keyboard goes through the same path, so typing behaviour does not
 change.
 
@@ -106,15 +113,28 @@ class and the recognizer behind `__bombkiSay`; the class comment in
 
 ## Scrolling
 
-The viewport reacts to the wheel and to PageUp/PageDown, but xterm.js
-binds touch only to mouse-event emulation, so a finger drag scrolls
-nothing. On a phone the bottom of a landscape 80x25 screen can sit
-under a rounded corner or the on-screen keyboard, so the page adds
-drag-to-scroll: a vertical drag moves the buffer in whole lines, over
-the whole scrollback (4000 lines - far past the 20 lines above and
-below the live view a cramped screen needs), and scrolling back to the
-bottom reattaches to the live output. Moves shorter than a line are
-left alone, so taps and selection still work.
+Drag scrolling is built into the viewport, as are the wheel and
+PageUp/PageDown, but all of them stop at the last buffer line. On
+a phone the bottom of a landscape 80x25 screen can sit under a
+rounded corner or the on-screen keyboard, and the lines the player
+needs are exactly the ones covered. So a drag that begins at the
+bottom edge lifts the screen itself, up to 20 lines: the last
+buffer line can then sit near the top of the screen, with blank
+space below it.
+
+The lift is a `translateY` on the screen element, not a scroll:
+the buffer and the scroll position are left alone, so the viewport
+keeps following live output and the lifted view simply moves with
+it - which is the point, the player wants the newest line pinned
+near the top while the game runs. xterm re-syncs `scrollTop` to
+the buffer after every render, which is why the scroll position
+cannot be used for this; a transform on the screen element is the
+one thing it never touches. A lift only ever starts at the bottom
+edge, gives way before the buffer scrolls again (the move is
+captured on the container and kept from the viewport's own touch
+handling while it lasts), and ends if the buffer scrolls up, so
+the two can never fight. Dragging back down unwinds it and returns
+to the live edge.
 
 ## Why the pty
 
