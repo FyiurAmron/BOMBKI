@@ -288,6 +288,12 @@ jobs:
         run: |
           set -e
           cd dist
+          # The Android artifact is anchored at its paths' common parent
+          # build/, so its files keep that directory structure; flatten
+          # them with the rest. rmdir fails loudly if the layout changes.
+          mv android/BOMBKI-debug-arm64-v8a.apk \
+             fpc/BOMBKI-android-arm64-v8a.so .
+          rmdir android fpc
           sha256sum BOMBKI-linux-x86_64 BOMBKI-windows-x86_64.exe \
             BOMBKI-android-arm64-v8a.so BOMBKI-debug-arm64-v8a.apk > SHA256SUMS
           ls -la
