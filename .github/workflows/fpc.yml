@@ -57,12 +57,17 @@ jobs:
           # GHCR repository names must be lowercase.
           OWNER="${{ github.repository_owner }}"
           IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-cross"
-          # The image is keyed by the content it is built from: the
-          # Dockerfile and the tools/ it copies into itself. A matching
-          # image is reused as-is; only a missing one is built and
-          # published, so the next run on the same content reuses it.
+          # The image is keyed by the content it is built from:
+          # the Dockerfile and the setup script it runs, which
+          # is all the image holds. Everything else under tools/
+          # - the build scripts, the Android app - is mounted
+          # over /src when the image runs, so changing it must
+          # not rebuild a cross-compiler. A matching image is
+          # reused as-is; only a missing one is built and
+          # published, so the next run on the same content
+          # reuses it.
           TAG=$( (sha256sum docker/fpc-cross/Dockerfile; \
-                  git ls-files -z tools/ | sort -z | xargs -0 sha256sum) \
+                  sha256sum tools/setup_fpc_windows_cross.sh) \
                  | sha256sum | cut -c1-12 )
           if docker pull "$IMAGE:$TAG"; then
             echo "reusing $IMAGE:$TAG"
@@ -132,12 +137,17 @@ jobs:
           # GHCR repository names must be lowercase.
           OWNER="${{ github.repository_owner }}"
           IMAGE="ghcr.io/${OWNER,,}/bombki-fpc-android"
-          # The image is keyed by the content it is built from: the
-          # Dockerfile and the tools/ it copies into itself. A matching
-          # image is reused as-is; only a missing one is built and
-          # published, so the next run on the same content reuses it.
+          # The image is keyed by the content it is built from:
+          # the Dockerfile and the setup script it runs, which
+          # is all the image holds. Everything else under tools/
+          # - the build scripts, the Android app - is mounted
+          # over /src when the image runs, so changing it must
+          # not rebuild a cross-compiler. A matching image is
+          # reused as-is; only a missing one is built and
+          # published, so the next run on the same content
+          # reuses it.
           TAG=$( (sha256sum docker/fpc-android/Dockerfile; \
-                  git ls-files -z tools/ | sort -z | xargs -0 sha256sum) \
+                  sha256sum tools/setup_fpc_android_cross.sh) \
                  | sha256sum | cut -c1-12 )
           if docker pull "$IMAGE:$TAG"; then
             echo "reusing $IMAGE:$TAG"

@@ -20,7 +20,13 @@ RUN apt-get update -qq && \
       binutils-aarch64-linux-gnu && \
     rm -rf /var/lib/apt/lists/*
 
-COPY tools/ /src/tools/
+# Only the setup script is copied in: it is the one thing the
+# image build runs, and it reads nothing else from the tree -
+# its payload is downloaded. The checkout is mounted over /src
+# when the image runs, so the rest of tools/ would be dead
+# weight, and copying it would tie the image's identity to
+# files it never uses.
+COPY tools/setup_fpc_android_cross.sh /src/tools/
 RUN /src/tools/setup_fpc_android_cross.sh --skip-packages \
       --install-dir /opt/fpc-android \
       --path-dir /opt/fpc-bin \
