@@ -2,7 +2,11 @@ name: release
 
 on:
   push:
-    tags: ['*']
+    # Version tags only: the rolling "latest" release is owned by the fpc
+    # workflow, which force-moves the latest tag to the newest main build;
+    # this workflow must not fire on that push and rebuild the same thing
+    # under a tag's name.
+    tags-ignore: ['latest']
 
 permissions:
   contents: write

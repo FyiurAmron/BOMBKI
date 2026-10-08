@@ -227,10 +227,133 @@ jobs:
           unzip -l build/android/BOMBKI-debug-arm64-v8a.apk \
             | grep -q "lib/arm64-v8a/libbombki.so"
 
-      - name: Upload APK
+      - name: Upload APK and game library
+        # Both files: the tagged release and the rolling latest release
+        # publish the bare library next to the APK that wraps it.
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
           name: bombki-android-arm64
-          path: build/android/BOMBKI-debug-arm64-v8a.apk
+          path: |
+            build/android/BOMBKI-debug-arm64-v8a.apk
+            build/fpc/BOMBKI-android-arm64-v8a.so
           if-no-files-found: error
+
+  # Rolling release: one permanent "latest" release whose assets are
+  # replaced in place on every push to main, so only the newest build is
+  # ever available (releases/latest/download/... is what the pages site
+  # links to). A failed build publishes nothing and leaves the previous
+  # release untouched. Same idea as Bowcki's ci.yml release job.
+  latest:
+    name: Latest release
+    needs: [linux-x86_64, windows-x86_64-cross, android-arm64]
+    if: >-
+      always() &&
+      needs.linux-x86_64.result == 'success' &&
+      needs.windows-x86_64-cross.result == 'success' &&
+      needs.android-arm64.result == 'success' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      # Two main pushes in flight at once must not swap the release's
+      # assets out of order; the newer run waits its turn.
+      group: latest-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v6
+        with:
+          name: bombki-linux-x86_64
+          path: dist
+
+      - name: Download Win64 build
+        uses: actions/download-artifact@v6
+        with:
+          name: bombki-windows-x86_64
+          path: dist
+
+      - name: Download Android build
+        uses: actions/download-artifact@v6
+        with:
+          name: bombki-android-arm64
+          path: dist
+
+      - name: Checksums
+        run: |
+          set -e
+          cd dist
+          sha256sum BOMBKI-linux-x86_64 BOMBKI-windows-x86_64.exe \
+            BOMBKI-android-arm64-v8a.so BOMBKI-debug-arm64-v8a.apk > SHA256SUMS
+          ls -la
+
+      - name: Prune stale assets
+        # Anything on the release that the checksum step did not just
+        # write is from an older build or an older name (asset names are
+        # case-insensitive, so renames collide). Comma-wrapped list, built
+        # here rather than in YAML. First run has no latest release, so
+        # there is nothing to prune.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: latest
+        run: |
+          set -e
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || { echo "no $TAG release yet; nothing to prune"; exit 0; }
+          keep=",BOMBKI-linux-x86_64,BOMBKI-windows-x86_64.exe,BOMBKI-android-arm64-v8a.so,BOMBKI-debug-arm64-v8a.apk,SHA256SUMS,"
+          gh release view "$TAG" --json assets --jq '.assets[].name' | while IFS= read -r name; do
+            case "$keep" in
+              *",$name,"*) ;;
+              *) echo "removing stale asset $name"
+                 gh release delete-asset "$TAG" "$name" --yes ;;
+            esac
+          done
+
+      - name: Publish rolling release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: latest
+        run: |
+          set -euo pipefail
+          # GitHub keeps the original published_at on an edited release, so
+          # the page's "released N ago" is the first build. Date the notes:
+          # local time for humans, UTC alongside it to stay unambiguous.
+          # The zone name picks CET or CEST on its own; LC_ALL=C keeps the
+          # month name English regardless of the runner locale.
+          TZ_NAME=Europe/Warsaw
+          NOTES="Automated build of ${GITHUB_SHA} at $(TZ=$TZ_NAME LC_ALL=C date +'%Y-%m-%d %H:%M %Z') ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes "$NOTES" --latest
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes "$NOTES" --latest
+          fi
+          # gh release edit --target leaves the tag where it is, so it
+          # would keep pointing at the first published build. Move it.
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
+          echo "tag $TAG -> $(git rev-parse "$TAG")"
+          # Clobbering races GitHub's asset deletion, so retry briefly.
+          upload() {
+            local asset="$1" attempt
+            for attempt in 1 2 3 4 5; do
+              if gh release upload "$TAG" "$asset" --clobber; then
+                return 0
+              fi
+              echo "upload of $asset failed (attempt $attempt), retrying"
+              sleep 10
+            done
+            echo "giving up on $asset"
+            return 1
+          }
+          for asset in BOMBKI-linux-x86_64 BOMBKI-windows-x86_64.exe \
+                       BOMBKI-android-arm64-v8a.so BOMBKI-debug-arm64-v8a.apk \
+                       SHA256SUMS; do
+            upload "$asset"
+          done
+          gh release view "$TAG" --json url,tagName --jq '"published " + .tagName + ": " + .url'
