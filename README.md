@@ -1,3 +1,5 @@
+*Dedicated to my children, today's and future; let The Sun always shine in your eyes.*
+
 # BOMBKI - Pascal byte-perfect reconstruction.
 
 This is a byte-perfect reconstruction of the original 1999' BOMBKI
